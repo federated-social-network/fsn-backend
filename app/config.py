@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     INSTANCE_NAME : str
     DATABASE_URL : str
+    SEND_TO_OTHER_INSTANCE: bool = False
 
     class Config:
         env_file = ".env"
