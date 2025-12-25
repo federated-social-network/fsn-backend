@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 from app.database import SessionLocal
 from app.config import settings
-
+import httpx
 
 Base.metadata.create_all(bind=engine)
 
@@ -18,6 +18,21 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def send_to_other_instance(post):
+    other_instance_inbox = "https://localhost:8001/inbox"
+    payload = {
+        "id":post.id,
+        "content":post.content,
+        "author":post.author,
+        "origin_instance":post.origin_instance
+    }
+
+    try:
+        httpx.post(other_instance_inbox,params=payload,timeout=2)
+    except Exception :
+        pass
+
 
 @app.post("/posts")
 def create_post(content:str,author:str,db:Session=Depends(get_db)):
