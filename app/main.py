@@ -20,7 +20,7 @@ def get_db():
         db.close()
 
 def send_to_other_instance(post):
-    other_instance_inbox = "https://localhost:8001/inbox"
+    other_instance_inbox = "http://localhost:8001/inbox"
     payload = {
         "id":post.id,
         "content":post.content,
@@ -45,6 +45,10 @@ def create_post(content:str,author:str,db:Session=Depends(get_db)):
     db.add(post)
     db.commit()
     db.refresh(post)
+
+    if settings.SEND_TO_OTHER_INSTANCE:
+        send_to_other_instance(post)
+        
     return post
 
 @app.post("/inbox")
