@@ -31,3 +31,17 @@ def create_post(content:str,author:str,db:Session=Depends(get_db)):
     db.commit()
     db.refresh(post)
     return post
+
+@app.post("/inbox")
+def inbox(id:str,content:str,author:str,origin_instance:str,db:Session=Depends(get_db)):
+    post = Post(
+        id=id,
+        content=content,
+        author=author,
+        origin_instance=origin_instance,
+        is_remote=True
+    )
+    db.add(post)
+    db.commit()
+    db.refresh(post)
+    return {"status":"accepted"}
