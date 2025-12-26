@@ -1,7 +1,6 @@
 from sqlalchemy import Column, String, Boolean, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
-import uuid
 from app.config import settings
 from passlib.context import CryptContext
 
