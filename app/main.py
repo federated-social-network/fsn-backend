@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from app.database import Base, engine
 from app.models import Post,User
 import uuid
@@ -33,15 +33,29 @@ def send_to_other_instance(post):
     except Exception :
         pass
 
+def authenticate(username: str, password: str, db):
+    user = db.query(User).filter(User.username == username).first()
+    if not user or not user.verify_password(password):
+        raise HTTPException(status_code=401, detail="Invalid Credentials")
+    return user
+
+
+
 
 @app.post("/posts")
-def create_post(content:str,author:str,db:Session=Depends(get_db)):
+def create_post(content:str,username:str,password:str,db:Session=Depends(get_db)):
+    
+    user = authenticate(username,password, db)
+    
     post = Post(
+        id=str(uuid.uuid4()),
         content = content,
-        author=author,
+        user_id=user.id,
+        author=user.username,
         origin_instance=settings.INSTANCE_NAME,
         is_remote=False
     )
+
     db.add(post)
     db.commit()
     db.refresh(post)
@@ -56,6 +70,7 @@ def inbox(id:str,content:str,author:str,origin_instance:str,db:Session=Depends(g
     post = Post(
         id=id,
         content=content,
+        user_id=None,
         author=author,
         origin_instance=origin_instance,
         is_remote=True
