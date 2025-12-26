@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from app.database import Base, engine
-from app.models import Post
-
+from app.models import Post,User
+import uuid
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from app.database import SessionLocal
@@ -64,3 +64,16 @@ def inbox(id:str,content:str,author:str,origin_instance:str,db:Session=Depends(g
     db.commit()
     db.refresh(post)
     return {"status":"accepted"}
+
+
+@app.post("/register")
+def register(username:str,password:str,db:Session=Depends(get_db)):
+    user = User(
+        id=str(uuid.uuid4()),
+        username=username,
+        password_hash=User.hash_password(password)
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"message":"user created"}
