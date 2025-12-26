@@ -77,3 +77,11 @@ def register(username:str,password:str,db:Session=Depends(get_db)):
     db.commit()
     db.refresh(user)
     return {"message":"user created"}
+
+
+@app.post("/login")
+def login(username:str,password:str,db:Session=Depends(get_db)):
+    user = db.query(User).filter(User.username==username).first()
+    if not user or not user.verify_password(password):
+        return {"error":"invalid credentials"}
+    return {"message":"login success"}
