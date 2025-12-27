@@ -2,15 +2,29 @@ from fastapi import FastAPI, HTTPException
 from app.database import Base, engine
 from app.models import Post,User
 import uuid
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from app.database import SessionLocal
 from app.config import settings
 import httpx
+from jose import jwt, JWTError
+from datetime import datetime, timedelta
+from fastapi import Header
+from fastapi.middleware.cors import CORSMiddleware
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Federated Backend")
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # dev only
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def get_db():
     db = SessionLocal()
@@ -39,14 +53,39 @@ def authenticate(username: str, password: str, db):
         raise HTTPException(status_code=401, detail="Invalid Credentials")
     return user
 
+def create_access_token(data:dict,expires_minutes:int=60):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=expires_minutes)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def verify_token(token: str):
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+def get_current_user(authorization: str = Header(...), db: Session = Depends(get_db)):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid auth header")
+
+    token = authorization.split(" ")[1]
+    payload = verify_token(token)
+
+    user = db.query(User).filter(User.id == payload["user_id"]).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user
 
 
 
 @app.post("/posts")
-def create_post(content:str,username:str,password:str,db:Session=Depends(get_db)):
-    
-    user = authenticate(username,password, db)
-    
+def create_post(content:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
+        
     post = Post(
         id=str(uuid.uuid4()),
         content = content,
@@ -82,21 +121,42 @@ def inbox(id:str,content:str,author:str,origin_instance:str,db:Session=Depends(g
 
 
 @app.post("/register")
-def register(username:str,password:str,db:Session=Depends(get_db)):
-    user = User(
-        id=str(uuid.uuid4()),
-        username=username,
-        password_hash=User.hash_password(password)
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return {"message":"user created"}
+def register(username: str, password: str, db: Session = Depends(get_db)):
+    try:
+        user = User(
+            id=str(uuid.uuid4()),
+            username=username,
+            password_hash=User.hash_password(password)
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        return {"message": "user created"}
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="username already exists"
+        )
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="internal server error"
+        )
 
 
 @app.post("/login")
-def login(username:str,password:str,db:Session=Depends(get_db)):
-    user = db.query(User).filter(User.username==username).first()
-    if not user or not user.verify_password(password):
-        return {"error":"invalid credentials"}
-    return {"message":"login success"}
+def login(username: str, password: str, db: Session = Depends(get_db)):
+    user = authenticate(username, password, db)
+
+    token = create_access_token({
+        "user_id": user.id,
+        "username": user.username,
+        "instance": settings.INSTANCE_NAME
+    })
+
+    return {"access_token": token}
