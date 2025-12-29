@@ -160,3 +160,9 @@ def login(username: str, password: str, db: Session = Depends(get_db)):
     })
 
     return {"access_token": token}
+
+@app.get("/get_posts")
+def get_posts(db:Session=Depends(get_db)):
+    posts = db.query(Post).order_by(Post.id.desc()).all()
+    return posts
+
