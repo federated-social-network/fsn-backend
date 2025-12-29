@@ -81,6 +81,13 @@ def get_current_user(authorization: str = Header(...), db: Session = Depends(get
 
     return user
 
+def send_delete_to_other_instance(post_id:str):
+    delete_other_instance_post = "http://localhost:8001/inbox/delete"
+    try:
+        httpx.post(delete_other_instance_post,params={"id":post_id},timeout=2)
+    except Exception:
+        pass
+
 
 
 @app.post("/posts")
@@ -166,7 +173,7 @@ def get_posts(db:Session=Depends(get_db)):
     posts = db.query(Post).order_by(Post.id.desc()).all()
     return posts
 
-@app.delete("/posts/{post_id}")
+@app.delete("/delete/{post_id}")
 def delete_post(post_id:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
     post = db.query(Post).filter(Post.id==post_id).first()
 
@@ -184,4 +191,15 @@ def delete_post(post_id:str,user:User=Depends(get_current_user),db:Session=Depen
     db.commit()
 
     if settings.SEND_TO_OTHER_INSTANCE:
-        pass
+        send_delete_to_other_instance(post_id)
+        
+
+@app.post("/inbox/delete")
+def delete_remote_post(id:str,db:Session=Depends(get_db)):
+    post = db.query(Post).filter(Post.id==id,Post.is_remote==True).first()
+    if not post:
+        return {"status":"ignored"}
+
+    db.delete(post)
+    db.commit()
+    return {"status":"deleted"}
