@@ -166,3 +166,22 @@ def get_posts(db:Session=Depends(get_db)):
     posts = db.query(Post).order_by(Post.id.desc()).all()
     return posts
 
+@app.delete("/posts/{post_id}")
+def delete_post(post_id:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
+    post = db.query(Post).filter(Post.id==post_id).first()
+
+
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    if post.is_remote:
+        raise HTTPException(status_code=403, detail="Cannot delete remote post")
+    
+    if post.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    
+    db.delete(post)
+    db.commit()
+
+    if settings.SEND_TO_OTHER_INSTANCE:
+        pass
