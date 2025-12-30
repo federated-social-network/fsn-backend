@@ -6,3 +6,4 @@ httpx
 pydantic
 passlib[argon2]
 python-jose[cryptography]
+pydantic-settings
