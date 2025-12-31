@@ -34,7 +34,7 @@ def get_db():
         db.close()
 
 def send_to_other_instance(post):
-    other_instance_inbox = "http://localhost:8001/inbox"
+    other_instance_inbox = "https://instance-b.onrender.com/inbox"
     payload = {
         "id":post.id,
         "content":post.content,
@@ -82,12 +82,15 @@ def get_current_user(authorization: str = Header(...), db: Session = Depends(get
     return user
 
 def send_delete_to_other_instance(post_id:str):
-    delete_other_instance_post = "http://localhost:8001/inbox/delete"
+    delete_other_instance_post = "https://instance-b.onrender.com/inbox/delete"
     try:
         httpx.post(delete_other_instance_post,params={"id":post_id},timeout=2)
     except Exception:
         pass
 
+@app.get("/")
+def homePage():
+    return{"message":"server is running..."}
 
 
 @app.post("/posts")
