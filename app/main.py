@@ -219,4 +219,5 @@ def getUser(user_id:str,user:User=Depends(get_current_user),db:Session=Depends(g
     return {
         "id" : db_user.id,
         "username" : db_user.username,
+        "email" : db_user.email
     }
