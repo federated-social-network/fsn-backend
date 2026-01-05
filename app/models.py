@@ -23,6 +23,8 @@ class User(Base):
     id = Column(String,primary_key=True)
     username = Column(String,unique=True,nullable=False)
     password_hash = Column(String,nullable=False)
+    email = Column(String,nullable=False)
+    #profile_photo_url = Column(String,nullable=True)
 
     @staticmethod
     def hash_password(password:str) -> str:
