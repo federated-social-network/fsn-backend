@@ -131,12 +131,13 @@ def inbox(id:str,content:str,author:str,origin_instance:str,db:Session=Depends(g
 
 
 @app.post("/register")
-def register(username: str, password: str, db: Session = Depends(get_db)):
+def register(username: str, password: str,email: str, db: Session = Depends(get_db)):
     try:
         user = User(
             id=str(uuid.uuid4()),
             username=username,
-            password_hash=User.hash_password(password)
+            password_hash=User.hash_password(password),
+            email=email
         )
         db.add(user)
         db.commit()
