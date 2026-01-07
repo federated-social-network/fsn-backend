@@ -12,6 +12,7 @@ from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from fastapi import Header
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import func
 
 Base.metadata.create_all(bind=engine)
 
@@ -216,8 +217,13 @@ def getUser(username:str,user:User=Depends(get_current_user),db:Session=Depends(
     if not db_user:
         raise HTTPException(status_code=404,detail="User not found")
     
+
+    post_count = (db.query(func.count(Post.id)).filter(Post.author_id == db_user.id).scalar())
+
+
     return {
         "id" : db_user.id,
         "username" : db_user.username,
-        "email" : db_user.email 
+        "email" : db_user.email,
+        "post_count": post_count
     }
