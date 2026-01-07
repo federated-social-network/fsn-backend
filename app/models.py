@@ -3,6 +3,8 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 from app.config import settings
 from passlib.context import CryptContext
+from sqlalchemy.sql import func
+from sqlalchemy import DateTime
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
@@ -15,7 +17,11 @@ class Post(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=True)
     origin_instance = Column(String, nullable=False)
     is_remote = Column(Boolean, default=False)
-
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
 
 class User(Base):
     __tablename__ = "users"
