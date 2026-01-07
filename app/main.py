@@ -218,7 +218,7 @@ def getUser(username:str,user:User=Depends(get_current_user),db:Session=Depends(
         raise HTTPException(status_code=404,detail="User not found")
     
 
-    post_count = (db.query(func.count(Post.id)).filter(Post.author_id == db_user.id).scalar())
+    post_count = (db.query(func.count(Post.id)).filter(Post.user_id == db_user.id).scalar())
 
 
     return {
