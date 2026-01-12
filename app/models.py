@@ -1,10 +1,12 @@
-from sqlalchemy import Column, String, Boolean, Text, ForeignKey
+from sqlalchemy import Column, String, Boolean, Text, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from app.database import Base
 from app.config import settings
 from passlib.context import CryptContext
 from sqlalchemy.sql import func
 from sqlalchemy import DateTime
+from datetime import datetime
+import uuid
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
@@ -38,3 +40,14 @@ class User(Base):
     
     def verify_password(self,password:str) -> bool:
         return pwd_context.verify(password,self.password_hash)
+    
+class Activity(Base):
+    __tablename__ = "activities"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    type = Column(String, nullable=False)
+    actor = Column(String, nullable=False)
+    object = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_local = Column(Boolean, default=True)
+    is_delivered = Column(Boolean, default=False)
