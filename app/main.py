@@ -111,7 +111,7 @@ def create_post(content:str,user:User=Depends(get_current_user),db:Session=Depen
     db.refresh(post)
 
     if settings.SEND_TO_OTHER_INSTANCE:
-        send_to_other_instance(post)
+        pass
         
     return post
 
@@ -195,8 +195,8 @@ def delete_post(post_id:str,user:User=Depends(get_current_user),db:Session=Depen
     db.delete(post)
     db.commit()
 
-    if settings.SEND_TO_OTHER_INSTANCE:
-        send_delete_to_other_instance(post_id)
+    if settings.SEND_TO_OTHER_INSTANCE: 
+        pass
         
 
 @app.post("/inbox/delete")
