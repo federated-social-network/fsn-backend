@@ -227,3 +227,27 @@ def getUser(username:str,user:User=Depends(get_current_user),db:Session=Depends(
         "email" : db_user.email,
         "post_count": post_count
     }
+
+@app.get("/users/{username}")
+def get_actor(username: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Actor not found")
+
+    base_url = "https://instance-a.onrender.com"
+
+    actor_id = f"{base_url}/users/{username}"
+
+    return {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": actor_id,
+        "type": "Person",
+        "preferredUsername": username,
+        "inbox": f"{base_url}/inbox",
+        "outbox": f"{actor_id}/outbox",
+        "publicKey": {
+            "id": f"{actor_id}#main-key",
+            "owner": actor_id,
+            "publicKeyPem": "DUMMY_PUBLIC_KEY_FOR_NOW"
+        }
+    }
