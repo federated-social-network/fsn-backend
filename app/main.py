@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from fastapi import Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func
+from app.models import Activity
 
 Base.metadata.create_all(bind=engine)
 
@@ -250,4 +251,35 @@ def get_actor(username: str, db: Session = Depends(get_db)):
             "owner": actor_id,
             "publicKeyPem": "DUMMY_PUBLIC_KEY_FOR_NOW"
         }
+    }
+
+@app.post("/users/{username}/outbox")
+def outbox(username: str, activity: dict, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if user.username != username:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot write to another actor's outbox"
+        )
+
+    if activity.get("actor") != f"http://127.0.0.1:8000/users/{username}":
+        raise HTTPException(
+            status_code=400,
+            detail="Actor mismatch"
+        )
+
+    new_activity = Activity(
+        type=activity.get("type"),
+        actor=activity.get("actor"),
+        object=activity.get("object"),
+        is_local=True,
+        is_delivered=False
+    )
+
+    db.add(new_activity)
+    db.commit()
+    db.refresh(new_activity)
+
+    return {
+        "status": "stored",
+        "activity_id": new_activity.id
     }
