@@ -90,17 +90,38 @@ def send_delete_to_other_instance(post_id:str):
     except Exception:
         pass
 
+
+def build_create_activity(post, base_url):
+    actor_url = f"{base_url}/users/{post.author}"
+
+    return {
+        "type": "Create",
+        "actor": actor_url,
+        "object": {
+            "type": "Note",
+            "id": f"{base_url}/posts/{post.id}",
+            "content": post.content,
+            "attributedTo": actor_url,
+            "published": post.created_at.isoformat()
+        }
+    }
+
+
+
 @app.get("/")
 def homePage():
     return{"message":"server is running..."}
 
 
 @app.post("/posts")
-def create_post(content:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-        
+def create_post(
+    content: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     post = Post(
         id=str(uuid.uuid4()),
-        content = content,
+        content=content,
         user_id=user.id,
         author=user.username,
         origin_instance=settings.INSTANCE_NAME,
@@ -111,10 +132,22 @@ def create_post(content:str,user:User=Depends(get_current_user),db:Session=Depen
     db.commit()
     db.refresh(post)
 
-    if settings.SEND_TO_OTHER_INSTANCE:
-        pass
-        
+    # 🔹 NEW: emit Create activity (local only)
+    activity_payload = build_create_activity(post, "https://instance-a.onrender.com")
+
+    activity = Activity(
+        type="Create",
+        actor=activity_payload["actor"],
+        object=activity_payload["object"],
+        is_local=True,
+        is_delivered=False
+    )
+
+    db.add(activity)
+    db.commit()
+
     return post
+
 
 @app.post("/inbox")
 def inbox(id:str,content:str,author:str,origin_instance:str,db:Session=Depends(get_db)):
@@ -283,3 +316,4 @@ def outbox(username: str, activity: dict, db: Session = Depends(get_db), user: U
         "status": "stored",
         "activity_id": new_activity.id
     }
+
