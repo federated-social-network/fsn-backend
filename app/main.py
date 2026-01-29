@@ -304,7 +304,7 @@ def get_actor(username: str, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="Actor not found")
 
-    base_url = "https://instance-a.onrender.com"
+    base_url = settings.BASE_URL
 
     actor_id = f"{base_url}/users/{username}"
 
@@ -330,7 +330,7 @@ def outbox(username: str, activity: dict, db: Session = Depends(get_db), user: U
             detail="Cannot write to another actor's outbox"
         )
 
-    if activity.get("actor") != f"http://127.0.0.1:8000/users/{username}":
+    if activity.get("actor") != f"{settings.BASE_URL}/users/{username}": 
         raise HTTPException(
             status_code=400,
             detail="Actor mismatch"
