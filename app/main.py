@@ -133,7 +133,7 @@ def create_post(
     db.refresh(post)
 
     # 🔹 NEW: emit Create activity (local only)
-    activity_payload = build_create_activity(post, "https://instance-a.onrender.com")
+    activity_payload = build_create_activity(post, settings.BASE_URL)
 
     activity = Activity(
         type="Create",
