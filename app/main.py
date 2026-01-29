@@ -14,6 +14,8 @@ from fastapi import Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func
 from app.models import Activity
+import httpx
+from app.config import settings
 
 Base.metadata.create_all(bind=engine)
 
@@ -107,6 +109,32 @@ def build_create_activity(post, base_url):
     }
 
 
+def deliver_activity(activity):
+    if not settings.DELIVERY_ENABLED:
+        return
+
+    payload = {
+        "type": activity.type,
+        "actor": activity.actor,
+        "object": activity.object
+    }
+
+    try:
+        resp = httpx.post(
+            settings.REMOTE_INBOX_URL,
+            json=payload,
+            timeout=5
+        )
+
+        if resp.status_code in (200, 202):
+            activity.is_delivered = True
+
+    except Exception as e:
+        # silent fail for now (demo-safe)
+        pass
+
+
+
 
 @app.get("/")
 def homePage():
@@ -145,7 +173,10 @@ def create_post(
 
     db.add(activity)
     db.commit()
+    db.refresh(activity)
 
+    # 🔹 STEP 8: real delivery
+    deliver_activity(activity)
     return post
 
 
