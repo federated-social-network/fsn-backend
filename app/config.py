@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     SEND_TO_OTHER_INSTANCE: bool = False
     SECRET_KEY : str
     ALGORITHM : str = "HS256"
+    BASE_URL : str
 
     class Config:
         env_file = ".env"
