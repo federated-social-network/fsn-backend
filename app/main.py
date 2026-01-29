@@ -150,19 +150,55 @@ def create_post(
 
 
 @app.post("/inbox")
-def inbox(id:str,content:str,author:str,origin_instance:str,db:Session=Depends(get_db)):
-    post = Post(
-        id=id,
-        content=content,
-        user_id=None,
-        author=author,
-        origin_instance=origin_instance,
-        is_remote=True
+def inbox(activity: dict, db: Session = Depends(get_db)):
+    activity_type = activity.get("type")
+    actor = activity.get("actor")
+    obj = activity.get("object")
+
+    if not activity_type or not actor or not obj:
+        raise HTTPException(status_code=400, detail="Invalid activity")
+
+    # Store activity (remote)
+    new_activity = Activity(
+        type=activity_type,
+        actor=actor,
+        object=obj,
+        is_local=False,
+        is_delivered=True
     )
-    db.add(post)
+    db.add(new_activity)
+
+    # Handle Create
+    if activity_type == "Create" and obj.get("type") == "Note":
+        post_id = obj.get("id")
+        content = obj.get("content")
+
+        # prevent duplicates
+        existing = db.query(Post).filter(Post.id == post_id).first()
+        if not existing:
+            post = Post(
+                id=post_id,
+                content=content,
+                user_id=None,
+                author=actor,
+                origin_instance=actor.split("/users/")[0],
+                is_remote=True
+            )
+            db.add(post)
+
+    # Handle Delete
+    if activity_type == "Delete":
+        target_id = obj.get("id")
+        post = db.query(Post).filter(
+            Post.id == target_id,
+            Post.is_remote == True
+        ).first()
+        if post:
+            db.delete(post)
+
     db.commit()
-    db.refresh(post)
-    return {"status":"accepted"}
+    return {"status": "accepted"}
+
 
 
 @app.post("/register")
