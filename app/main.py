@@ -12,7 +12,7 @@ from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from fastapi import Header
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from app.models import Activity
 import httpx
 from app.config import settings
@@ -235,7 +235,7 @@ def inbox(activity: dict, db: Session = Depends(get_db)):
             .filter(Post.is_remote == True)
             .filter(Post.id.endswith(target_id.split("/")[-1]))
             .first()
-        )
+        )   
         if post:
             db.delete(post)
 
@@ -377,28 +377,39 @@ def getUser(username:str,user:User=Depends(get_current_user),db:Session=Depends(
         "post_count": post_count
     }
 
-@app.get("/users/{username}")
-def get_actor(username: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Actor not found")
+@app.get("/get_user/{username}")
+def get_user_profile(
+    username: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    db_user = db.query(User).filter(User.username == username).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-    base_url = settings.BASE_URL
-
-    actor_id = f"{base_url}/users/{username}"
+    posts = (
+        db.query(Post)
+        .filter(
+            Post.user_id == db_user.id,
+            Post.is_remote == False
+        )
+        .order_by(desc(Post.created_at))
+        .all()
+    )
 
     return {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "id": actor_id,
-        "type": "Person",
-        "preferredUsername": username,
-        "inbox": f"{base_url}/inbox",
-        "outbox": f"{actor_id}/outbox",
-        "publicKey": {
-            "id": f"{actor_id}#main-key",
-            "owner": actor_id,
-            "publicKeyPem": "DUMMY_PUBLIC_KEY_FOR_NOW"
-        }
+        "id": db_user.id,
+        "username": db_user.username,
+        "email": db_user.email,
+        "post_count": len(posts),
+        "posts": [
+            {
+                "id": post.id,
+                "content": post.content,
+                "created_at": post.created_at.isoformat()
+            }
+            for post in posts
+        ]
     }
 
 @app.post("/users/{username}/outbox")
