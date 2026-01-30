@@ -51,3 +51,12 @@ class Activity(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     is_local = Column(Boolean, default=True)
     is_delivered = Column(Boolean, default=False)
+
+class Connection(Base):
+    __tablename__ = "connections"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    requester_id = Column(String, ForeignKey("users.id"), nullable=False)
+    target_actor = Column(String, nullable=False)  # actor URL
+    status = Column(String, default="pending")     # pending | accepted | rejected
+    created_at = Column(DateTime, default=datetime.utcnow)
