@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from app.database import Base, engine
-from app.models import Post,User
+from app.models import Post,User, Activity, Connection
 import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -14,7 +14,6 @@ from datetime import datetime, timedelta
 from fastapi import Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, desc
-from app.models import Activity
 import httpx
 from app.config import settings
 
@@ -145,6 +144,24 @@ def build_delete_activity(post, base_url):
         }
     }
 
+def build_follow_activity(actor_url: str, target_actor: str):
+    return {
+        "type": "Follow",
+        "actor": actor_url,
+        "object": target_actor
+    }
+
+
+def build_accept_activity(actor_url: str, follow_activity: dict):
+    return {
+        "type": "Accept",
+        "actor": actor_url,
+        "object": follow_activity
+    }
+
+
+
+
 
 
 @app.get("/")
@@ -239,6 +256,26 @@ def inbox(activity: dict, db: Session = Depends(get_db)):
         )   
         if post:
             db.delete(post)
+
+    if activity_type == "Follow":
+        connection = Connection(
+            requester_id="REMOTE",  # placeholder
+            target_actor=activity["object"],
+            status="pending"
+        )
+        db.add(connection)
+
+    if activity_type == "Accept":
+        follow = activity["object"]
+        actor = follow["actor"]
+        target = follow["object"]
+
+        conn = db.query(Connection).filter(
+            Connection.target_actor == actor
+        ).first()
+
+        if conn:
+            conn.status = "accepted"
 
     db.commit()
     return {"status": "accepted"}
@@ -462,4 +499,111 @@ def random_users(db: Session = Depends(get_db)):
             "email": u.email
         }
         for u in users
+    ]
+
+
+@app.post("/connect/{username}")
+def connect_user(
+    username: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    target = db.query(User).filter(User.username == username).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    target_actor = f"{settings.BASE_URL}/users/{username}"
+
+    existing = db.query(Connection).filter(
+        Connection.requester_id == user.id,
+        Connection.target_actor == target_actor
+    ).first()
+
+    if existing:
+        raise HTTPException(status_code=400, detail="Request already sent")
+
+    connection = Connection(
+        requester_id=user.id,
+        target_actor=target_actor,
+        status="pending"
+    )
+
+    db.add(connection)
+    db.commit()
+    db.refresh(connection)
+
+    # 🔹 Build Follow activity
+    follow_activity = build_follow_activity(
+        actor_url=f"{settings.BASE_URL}/users/{user.username}",
+        target_actor=target_actor
+    )
+
+    # 🔹 Deliver ONLY if enabled
+    if settings.SEND_TO_OTHER_INSTANCE:
+        deliver_activity(follow_activity)
+
+    return {"status": "request_sent"}
+
+
+
+@app.post("/connect/accept/{connection_id}")
+def accept_connection(
+    connection_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    connection = db.query(Connection).filter(Connection.id == connection_id).first()
+    if not connection:
+        raise HTTPException(status_code=404, detail="Connection not found")
+
+    expected_actor = f"{settings.BASE_URL}/users/{user.username}"
+    if connection.target_actor != expected_actor:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    connection.status = "accepted"
+    db.commit()
+
+    # 🔹 Send Accept activity
+    follow_activity = build_follow_activity(
+        actor_url=f"{settings.BASE_URL}/users/{connection.requester_id}",
+        target_actor=expected_actor
+    )
+
+    accept_activity = build_accept_activity(
+        actor_url=expected_actor,
+        follow_activity=follow_activity
+    )
+
+    if settings.SEND_TO_OTHER_INSTANCE:
+        deliver_activity(accept_activity)
+
+    return {"status": "connected"}
+
+@app.get("/timeline_connected_users")
+def timeline_connected_users(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    actor_url = f"{settings.BASE_URL}/users/{user.username}"
+
+    connections = db.query(Connection).filter(
+        Connection.requester_id == user.id,
+        Connection.status == "accepted"
+    ).all()
+
+    connected_actors = [c.target_actor for c in connections]
+
+    posts = db.query(Post).filter(
+        (Post.author.in_(connected_actors)) |
+        (Post.user_id == user.id)
+    ).order_by(Post.created_at.desc()).all()
+
+    return [
+        {
+            "id": p.id,
+            "content": p.content,
+            "author": p.author,
+            "created_at": p.created_at.isoformat()
+        }
+        for p in posts
     ]
