@@ -134,6 +134,16 @@ def deliver_activity(activity):
         pass
 
 
+def build_delete_activity(post, base_url):
+    actor_url = f"{base_url}/users/{post.author}"
+    return {
+        "type": "Delete",
+        "actor": actor_url,
+        "object": {
+            "id": f"{base_url}/posts/{post.id}"
+        }
+    }
+
 
 
 @app.get("/")
@@ -317,11 +327,23 @@ def delete_post(post_id:str,user:User=Depends(get_current_user),db:Session=Depen
     if post.user_id != user.id:
         raise HTTPException(status_code=403, detail="Not allowed")
     
+    activity_payload = build_delete_activity(post, settings.BASE_URL)
+    activity = Activity(
+        type="Delete",
+        actor=activity_payload["actor"],
+        object=activity_payload["object"],
+        is_local=True,
+        is_delivered=False
+    )
+    db.add(activity)
     db.delete(post)
     db.commit()
+    db.refresh(activity)
 
-    if settings.SEND_TO_OTHER_INSTANCE: 
-        pass
+    deliver_activity(activity)
+    db.commit()
+
+    return {"status":"deleted"}
         
 
 @app.post("/inbox/delete")
