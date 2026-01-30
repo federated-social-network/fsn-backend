@@ -133,6 +133,20 @@ def deliver_activity(activity):
         # silent fail for now (demo-safe)
         pass
 
+def deliver_raw_activity(activity_json: dict):
+    if not settings.SEND_TO_OTHER_INSTANCE:
+        return
+
+    try:
+        httpx.post(
+            settings.REMOTE_INBOX_URL,
+            json=activity_json,
+            timeout=5
+        )
+    except Exception:
+        pass
+
+
 
 def build_delete_activity(post, base_url):
     actor_url = f"{base_url}/users/{post.author}"
@@ -540,7 +554,7 @@ def connect_user(
 
     # 🔹 Deliver ONLY if enabled
     if settings.SEND_TO_OTHER_INSTANCE:
-        deliver_activity(follow_activity)
+        deliver_raw_activity(follow_activity)
 
     return {"status": "request_sent"}
 
@@ -575,7 +589,7 @@ def accept_connection(
     )
 
     if settings.SEND_TO_OTHER_INSTANCE:
-        deliver_activity(accept_activity)
+        deliver_raw_activity(follow_activity)
 
     return {"status": "connected"}
 
