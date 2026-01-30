@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from app.database import SessionLocal
+from sqlalchemy.sql import func
 from app.config import settings
 import httpx
 from jose import jwt, JWTError
@@ -443,3 +444,22 @@ def outbox(username: str, activity: dict, db: Session = Depends(get_db), user: U
         "activity_id": new_activity.id
     }
 
+
+
+@app.get("/random_users")
+def random_users(db: Session = Depends(get_db)):
+    users = (
+        db.query(User)
+        .order_by(func.random())
+        .limit(5)
+        .all()
+    )
+
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email
+        }
+        for u in users
+    ]
