@@ -556,7 +556,7 @@ def connect_user(
     if settings.SEND_TO_OTHER_INSTANCE:
         deliver_raw_activity(follow_activity)
 
-    return {"status": "request_sent"}
+    return {"status": "request_sent","connection_id":connection.id}
 
 
 
