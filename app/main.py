@@ -359,23 +359,23 @@ def delete_remote_post(id:str,db:Session=Depends(get_db)):
     return {"status":"deleted"}
 
 
-@app.get("/get_user/{username}")
-def getUser(username:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    db_user = db.query(User).filter(User.username==username).first()
+# @app.get("/get_user/{username}")
+# def getUser(username:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
+#     db_user = db.query(User).filter(User.username==username).first()
 
-    if not db_user:
-        raise HTTPException(status_code=404,detail="User not found")
+#     if not db_user:
+#         raise HTTPException(status_code=404,detail="User not found")
     
 
-    post_count = (db.query(func.count(Post.id)).filter(Post.user_id == db_user.id).scalar())
+#     post_count = (db.query(func.count(Post.id)).filter(Post.user_id == db_user.id).scalar())
 
 
-    return {
-        "id" : db_user.id,
-        "username" : db_user.username,
-        "email" : db_user.email,
-        "post_count": post_count
-    }
+#     return {
+#         "id" : db_user.id,
+#         "username" : db_user.username,
+#         "email" : db_user.email,
+#         "post_count": post_count
+#     }
 
 @app.get("/get_user/{username}")
 def get_user_profile(
