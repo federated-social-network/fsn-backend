@@ -230,10 +230,12 @@ def inbox(activity: dict, db: Session = Depends(get_db)):
     # Handle Delete
     if activity_type == "Delete":
         target_id = obj.get("id")
-        post = db.query(Post).filter(
-            Post.id == target_id,
-            Post.is_remote == True
-        ).first()
+        post = (
+            db.query(Post)
+            .filter(Post.is_remote == True)
+            .filter(Post.id.endswith(target_id.split("/")[-1]))
+            .first()
+        )
         if post:
             db.delete(post)
 
