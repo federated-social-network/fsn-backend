@@ -566,58 +566,82 @@ def accept_connection(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    connection = db.query(Connection).filter(Connection.id == connection_id).first()
+    connection = db.query(Connection).filter(
+        Connection.id == connection_id,
+        Connection.status == "pending"
+    ).first()
+
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
 
-    expected_actor = f"{settings.BASE_URL}/users/{user.username}"
-    if connection.target_actor != expected_actor:
+    my_actor = f"{settings.BASE_URL}/users/{user.username}"
+
+    # Ensure the logged-in user is the target
+    if connection.target_actor != my_actor:
         raise HTTPException(status_code=403, detail="Not allowed")
 
+    # 1️⃣ Mark original request as accepted
     connection.status = "accepted"
+
+    # 2️⃣ Create mirror connection (THIS IS THE FIX)
+    mirror = Connection(
+        requester_id = user.id,
+        target_actor = f"{settings.BASE_URL}/users/" + (
+            db.query(User)
+            .filter(User.id == connection.requester_id)
+            .first()
+            .username
+        ),
+        status = "accepted"
+    )
+
+    db.add(mirror)
     db.commit()
 
-    # 🔹 Send Accept activity
-    follow_activity = build_follow_activity(
-        actor_url=f"{settings.BASE_URL}/users/{connection.requester_id}",
-        target_actor=expected_actor
-    )
-
-    accept_activity = build_accept_activity(
-        actor_url=expected_actor,
-        follow_activity=follow_activity
-    )
-
-    if settings.SEND_TO_OTHER_INSTANCE:
-        deliver_raw_activity(follow_activity)
-
     return {"status": "connected"}
+
+
+from sqlalchemy import desc
 
 @app.get("/timeline_connected_users")
 def timeline_connected_users(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    actor_url = f"{settings.BASE_URL}/users/{user.username}"
-
+    # Step 1: get connections where I am the requester
     connections = db.query(Connection).filter(
         Connection.requester_id == user.id,
         Connection.status == "accepted"
     ).all()
 
-    connected_actors = [c.target_actor for c in connections]
+    # Step 2: extract usernames from target_actor URLs
+    connected_usernames = [
+        c.target_actor.rstrip("/").split("/")[-1]
+        for c in connections
+    ]
 
+    # Step 3: fetch posts of ONLY those users
     posts = db.query(Post).filter(
-        (Post.author.in_(connected_actors)) |
-        (Post.user_id == user.id)
-    ).order_by(Post.created_at.desc()).all()
+        Post.author.in_(connected_usernames)
+    ).order_by(desc(Post.created_at)).all()
 
+    print(connected_usernames)
+
+    # Step 4: return result
     return [
         {
-            "id": p.id,
-            "content": p.content,
-            "author": p.author,
-            "created_at": p.created_at.isoformat()
+            "id": post.id,
+            "content": post.content,
+            "author": post.author,
+            "created_at": post.created_at.isoformat()
         }
-        for p in posts
+        for post in posts
     ]
+
+@app.get("/get_current_user")
+def get_current_user_info(user: User = Depends(get_current_user)):
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email
+    }
