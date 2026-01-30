@@ -678,3 +678,32 @@ def get_current_user_info(user: User = Depends(get_current_user)):
         "username": user.username,
         "email": user.email
     }
+
+
+@app.get("/connections/pending")
+def pending_connections(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    my_actor = f"{settings.BASE_URL}/users/{user.username}"
+
+    pending = db.query(Connection).filter(
+        Connection.target_actor == my_actor,
+        Connection.status == "pending"
+    ).all()
+
+    results = []
+
+    for conn in pending:
+        requester = db.query(User).filter(
+            User.id == conn.requester_id
+        ).first()
+
+        if requester:
+            results.append({
+                "connection_id": conn.id,
+                "from_user_id": requester.id,
+                "from_username": requester.username
+            })
+
+    return results
