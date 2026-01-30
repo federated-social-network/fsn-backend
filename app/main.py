@@ -274,10 +274,34 @@ def login(username: str, password: str, db: Session = Depends(get_db)):
 
     return {"access_token": token}
 
+#Need to change ---
 @app.get("/get_posts")
 def get_posts(db:Session=Depends(get_db)):
     posts = db.query(Post).order_by(Post.id.desc()).all()
     return posts
+#               ----------------
+
+@app.get("/timeline")
+def timeline(db: Session = Depends(get_db)):
+    posts = (
+        db.query(Post)
+        .order_by(Post.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": post.id,
+            "content": post.content,
+            "author": post.author,
+            "origin_instance": post.origin_instance,
+            "is_remote": post.is_remote,
+            "created_at": post.created_at.isoformat()
+        }
+        for post in posts
+    ]
+
+
 
 @app.delete("/delete/{post_id}")
 def delete_post(post_id:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
