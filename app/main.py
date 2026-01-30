@@ -497,10 +497,43 @@ def outbox(username: str, activity: dict, db: Session = Depends(get_db), user: U
 
 
 
+from sqlalchemy import and_, or_, func
+
 @app.get("/random_users")
-def random_users(db: Session = Depends(get_db)):
+def random_users(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    my_actor = f"{settings.BASE_URL}/users/{user.username}"
+
+    # All actors I have ANY connection with (pending or accepted)
+    connected_actors = (
+        db.query(Connection.target_actor)
+        .filter(Connection.requester_id == user.id)
+        .union(
+            db.query(
+                func.concat(
+                    settings.BASE_URL,
+                    "/users/",
+                    User.username
+                )
+            )
+            .join(Connection, Connection.requester_id == User.id)
+            .filter(Connection.target_actor == my_actor)
+        )
+        .subquery()
+    )
+
     users = (
         db.query(User)
+        .filter(
+            User.id != user.id,  # exclude self
+            ~func.concat(
+                settings.BASE_URL,
+                "/users/",
+                User.username
+            ).in_(connected_actors)
+        )
         .order_by(func.random())
         .limit(5)
         .all()
