@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Text, ForeignKey, JSON
+from sqlalchemy import Column, String, Boolean, Text, ForeignKey, JSON, Integer
 from sqlalchemy.orm import relationship
 from app.database import Base
 from app.config import settings
@@ -59,4 +59,14 @@ class Connection(Base):
     requester_id = Column(String, ForeignKey("users.id"), nullable=False)
     target_actor = Column(String, nullable=False)  # actor URL
     status = Column(String, default="pending")     # pending | accepted | rejected
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class PasswordReset(Base):
+    __tablename__ = "password_resets"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    otp = Column(String, nullable=False)
+    otp_expires_at = Column(DateTime, nullable=False)
+    is_used = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
