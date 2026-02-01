@@ -119,6 +119,7 @@ def send_otp_email(email: str, otp: str, username: str) -> bool:
     <html>
         <body>
             <p>Hello {username},</p>
+            <p style="color: #808080;">Tips for new password : Keep your password long and ensure that it does not contain any common terms that could be cracked easily</p>
             <p>Your OTP for password reset is:</p>
             <h2 style="color: #007bff;">{otp}</h2>
             <p>This OTP will expire in {settings.OTP_EXPIRY_MINUTES} minutes.</p>
