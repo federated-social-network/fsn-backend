@@ -1,6 +1,7 @@
 import random
 import string
 import smtplib
+import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
@@ -13,33 +14,60 @@ def generate_otp(length: int = 6) -> str:
     return ''.join(random.choices(string.digits, k=length))
 
 
-def _send_with_gmail_smtp(email: str, subject: str, html: str, text: str) -> bool:
-    """Send email using Gmail SMTP"""
+def _send_with_gmail_oauth(email: str, subject: str, html: str, text: str) -> bool:
+    """Send email using Gmail API with OAuth2 credentials"""
     try:
-        if not settings.GMAIL_SMTP_USER or not settings.GMAIL_SMTP_PASSWORD:
-            print("Gmail SMTP credentials not configured")
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+        
+        if not settings.GMAIL_CLIENT_ID or not settings.GMAIL_CLIENT_SECRET or not settings.GMAIL_REFRESH_TOKEN:
+            print("Gmail OAuth2 credentials not configured")
             return False
+        
+        # Create credentials from OAuth2 tokens
+        credentials = Credentials(
+            token=None,  # Will be refreshed
+            refresh_token=settings.GMAIL_REFRESH_TOKEN,
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=settings.GMAIL_CLIENT_ID,
+            client_secret=settings.GMAIL_CLIENT_SECRET,
+            scopes=['https://www.googleapis.com/auth/gmail.send']
+        )
+        
+        # Refresh token to get valid access token
+        request = Request()
+        credentials.refresh(request)
+        
+        # Build Gmail service
+        service = build('gmail', 'v1', credentials=credentials)
         
         # Create message
         message = MIMEMultipart('alternative')
-        message['Subject'] = subject
-        message['From'] = settings.FROM_EMAIL or settings.GMAIL_SMTP_USER
-        message['To'] = email
+        message['to'] = email
+        message['from'] = settings.FROM_EMAIL
+        message['subject'] = subject
         
         part1 = MIMEText(text, 'plain')
         part2 = MIMEText(html, 'html')
         message.attach(part1)
         message.attach(part2)
         
-        # Send via Gmail SMTP
-        with smtplib.SMTP('smtp.gmail.com', 587) as server:
-            server.starttls()
-            server.login(settings.GMAIL_SMTP_USER, settings.GMAIL_SMTP_PASSWORD)
-            server.sendmail(settings.FROM_EMAIL or settings.GMAIL_SMTP_USER, email, message.as_string())
+        # Encode message for Gmail API
+        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
         
+        # Send message
+        result = service.users().messages().send(
+            userId='me',
+            body={'raw': raw_message}
+        ).execute()
+        
+        print(f"Email sent successfully. Message ID: {result.get('id')}")
         return True
     except Exception as e:
-        print(f"Error sending email with Gmail SMTP: {str(e)}")
+        print(f"Error sending email with Gmail API: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -101,8 +129,8 @@ def send_otp_email(email: str, otp: str, username: str) -> bool:
     
     provider = settings.EMAIL_PROVIDER.lower()
     
-    if provider == "gmail":
-        return _send_with_gmail_smtp(email, subject, html, text)
+    if provider == "gmail_oauth":
+        return _send_with_gmail_oauth(email, subject, html, text)
     elif provider == "smtp":
         return _send_with_smtp(email, subject, html, text)
     else:
