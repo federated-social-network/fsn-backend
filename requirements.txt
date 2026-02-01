@@ -7,3 +7,7 @@ pydantic
 passlib[argon2]
 python-jose[cryptography]
 pydantic-settings
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+email-validator
