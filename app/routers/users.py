@@ -208,3 +208,44 @@ def pending_connections(
             })
 
     return results
+
+@router.get("/count_connections")
+def count_connections(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    my_actor = f"{settings.BASE_URL}/users/{user.username}"
+
+    count = db.query(Connection).filter(
+        Connection.target_actor == my_actor,
+        Connection.status == "accepted"
+    ).count()
+
+    return {"connection_count": count}
+
+@router.get("/list_connections")
+def list_connections(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    my_actor = f"{settings.BASE_URL}/users/{user.username}"
+
+    connections = db.query(Connection).filter(
+        Connection.target_actor == my_actor,
+        Connection.status == "accepted"
+    ).all()
+
+    results = []
+
+    for conn in connections:
+        requester = db.query(User).filter(
+            User.id == conn.requester_id
+        ).first()
+
+        if requester:
+            results.append({
+                "user_id": requester.id,
+                "username": requester.username
+            })
+
+    return results
