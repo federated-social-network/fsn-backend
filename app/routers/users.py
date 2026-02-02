@@ -249,3 +249,39 @@ def list_connections(
             })
 
     return results
+
+@router.post("/remove_connection/{username}")
+def remove_connection(
+    username: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    target_user = db.query(User).filter(User.username == username).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    target_actor = f"{settings.BASE_URL}/users/{username}"
+    my_actor = f"{settings.BASE_URL}/users/{user.username}"
+
+    # Remove my request to target
+    conn1 = db.query(Connection).filter(
+        Connection.requester_id == user.id,
+        Connection.target_actor == target_actor,
+        Connection.status == "accepted"
+    ).first()
+
+    # Remove target's request to me
+    conn2 = db.query(Connection).filter(
+        Connection.requester_id == target_user.id,
+        Connection.target_actor == my_actor,
+        Connection.status == "accepted"
+    ).first()
+
+    if conn1:
+        db.delete(conn1)
+    if conn2:
+        db.delete(conn2)
+
+    db.commit()
+
+    return {"status": "connection_removed"}
