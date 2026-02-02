@@ -9,8 +9,13 @@ engine = create_engine(
         "sslmode": "require",
         "options": "-c statement_timeout=5000"
     },
+    pool_size=20,
+    max_overflow=40,
+    pool_timeout=30,
+    pool_recycle=1800,
     pool_pre_ping=True
 )
+
 
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
