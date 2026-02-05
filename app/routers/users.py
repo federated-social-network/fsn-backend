@@ -9,6 +9,75 @@ from app.services.federation import build_follow_activity, deliver_raw_activity
 
 router = APIRouter()
 
+@router.get("/search_users")
+def search_users(
+    q: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Fast prefix-based user search using SQL ILIKE.
+    Returns users whose username starts with the query string (case-insensitive).
+    Includes connection status and self-detection.
+    """
+    if not q or not q.strip():
+        return []
+    
+    search_pattern = f"{q.strip()}%"
+    
+    # Get matching users using ILIKE for case-insensitive prefix search
+    matching_users = (
+        db.query(User)
+        .filter(User.username.ilike(search_pattern))
+        .limit(10)
+        .all()
+    )
+    
+    if not matching_users:
+        return []
+    
+    my_actor = f"{settings.BASE_URL}/users/{user.username}"
+    
+    # Get all connected actors for current user
+    connected_actors = set()
+    connections = db.query(Connection).filter(
+        Connection.requester_id == user.id,
+        Connection.status == "accepted"
+    ).all()
+    for conn in connections:
+        connected_actors.add(conn.target_actor)
+    
+    # Get pending connection actors
+    pending_actors = set()
+    pending_connections = db.query(Connection).filter(
+        Connection.requester_id == user.id,
+        Connection.status == "pending"
+    ).all()
+    for conn in pending_connections:
+        pending_actors.add(conn.target_actor)
+    
+    results = []
+    for u in matching_users:
+        user_actor = f"{settings.BASE_URL}/users/{u.username}"
+        
+        if u.id == user.id:
+            status = "self"
+        elif user_actor in connected_actors:
+            status = "connected"
+        elif user_actor in pending_actors:
+            status = "pending"
+        else:
+            status = "none"
+        
+        results.append({
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "status": status
+        })
+    
+    return results
+
 @router.get("/get_current_user")
 def get_current_user_info(user: User = Depends(get_current_user)):
     return {"id": user.id, "username": user.username, "email": user.email}
