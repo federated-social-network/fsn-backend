@@ -1,10 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
-from app.main import app, get_current_user
+from app.main import app
+from app.routers.users import get_current_user
 from app.models import User
 
 @pytest.fixture
-def client():
+def client():   
     return TestClient(app)
 
 @pytest.fixture
