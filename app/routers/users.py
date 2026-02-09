@@ -176,6 +176,9 @@ def connect_user(
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if target.id == user.id:
+        raise HTTPException(status_code=400, detail="Cannot connect to yourself")
+
     target_actor = f"{settings.BASE_URL}/users/{username}"
 
     existing = db.query(Connection).filter(
