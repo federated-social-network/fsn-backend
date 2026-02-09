@@ -36,7 +36,7 @@ function Install-DevDependencies {
 
 function Start-Server {
     Write-Host "Starting development server..." -ForegroundColor Green
-    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    & "C:\Program Files\Python310\python.exe" -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 }
 
 function Run-Tests {

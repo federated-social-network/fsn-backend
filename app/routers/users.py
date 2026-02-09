@@ -176,9 +176,6 @@ def connect_user(
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if target.id == user.id:
-        raise HTTPException(status_code=400, detail="Cannot connect to yourself")
-
     target_actor = f"{settings.BASE_URL}/users/{username}"
 
     existing = db.query(Connection).filter(
@@ -322,7 +319,7 @@ def list_connections(
 
     return results
 
-@router.post("/remove_connection/{username}")
+@router.delete("/remove_connection/{username}")
 def remove_connection(
     username: str,
     user: User = Depends(get_current_user),
