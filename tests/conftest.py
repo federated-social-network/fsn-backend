@@ -8,26 +8,41 @@ import uuid
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Post, User
+from sqlalchemy import event
+from sqlalchemy.orm import Session
+from app.database import engine, SessionLocal
 
 @pytest.fixture
 def client():   
     return TestClient(app)
 
+
 @pytest.fixture
 def db():
-    db = next(get_db())
-    trans = db.begin()
+    connection = engine.connect()
+    transaction = connection.begin()      # outer transaction
+
+    session = SessionLocal(bind=connection)
+    session.begin_nested()                # SAVEPOINT
+
+    @event.listens_for(session, "after_transaction_end")
+    def restart_savepoint(sess, trans):
+        if trans.nested and not trans._parent.nested:
+            sess.begin_nested()
+
     try:
-        yield db
+        yield session
     finally:
-        trans.rollback()
-        db.close()
+        session.close()
+        transaction.rollback()            # full rollback
+        connection.close()
+
 
 @pytest.fixture
 def fake_user(db: Session):
     user = User(
         id=str(uuid.uuid4()),
-        username="testuser2",
+        username="testuser7",
         email="test@test.com",
         password_hash=User.hash_password("testpassword")
     )
@@ -40,5 +55,11 @@ def fake_user(db: Session):
 @pytest.fixture(autouse=True)
 def override_auth(fake_user):
     app.dependency_overrides[get_current_user] = lambda: fake_user
+    yield
+    app.dependency_overrides.clear()
+
+@pytest.fixture(autouse=True)
+def override_db(db):
+    app.dependency_overrides[get_db] = lambda: db
     yield
     app.dependency_overrides.clear()
