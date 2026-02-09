@@ -16,16 +16,18 @@ def client():
 @pytest.fixture
 def db():
     db = next(get_db())
+    trans = db.begin()
     try:
         yield db
     finally:
+        trans.rollback()
         db.close()
 
 @pytest.fixture
 def fake_user(db: Session):
     user = User(
         id=str(uuid.uuid4()),
-        username="testuser",
+        username="testuser2",
         email="test@test.com",
         password_hash=User.hash_password("testpassword")
     )
