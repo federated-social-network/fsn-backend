@@ -322,7 +322,7 @@ def list_connections(
 
     return results
 
-@router.post("/remove_connection/{username}")
+@router.delete("/remove_connection/{username}")
 def remove_connection(
     username: str,
     user: User = Depends(get_current_user),
