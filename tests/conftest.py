@@ -1,5 +1,13 @@
 from fastapi import Depends
 import pytest
+import os
+
+# Set environment variables for testing BEFORE importing app
+os.environ["INSTANCE_NAME"] = "testinfo.com"
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"  # Use in-memory DB for tests if possible, or a file
+os.environ["SECRET_KEY"] = "supersecretkey"
+os.environ["BASE_URL"] = "http://testinfo.com"
+
 from fastapi.testclient import TestClient
 from app.main import app
 from app.routers.users import get_current_user
@@ -40,10 +48,12 @@ def db():
 
 @pytest.fixture
 def fake_user(db: Session):
+    uid = str(uuid.uuid4())
+    unique_suffix = uid[:8]
     user = User(
-        id=str(uuid.uuid4()),
-        username="testuser7",
-        email="test@test.com",
+        id=uid,
+        username=f"user_{unique_suffix}",
+        email=f"user_{unique_suffix}@test.com",
         password_hash=User.hash_password("testpassword")
     )
     db.add(user)

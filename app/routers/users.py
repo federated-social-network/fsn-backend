@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel,  Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from app.database import get_db
@@ -360,3 +361,38 @@ def remove_connection(
     db.commit()
 
     return {"status": "connection_removed"}
+
+class ProfileUpdate(BaseModel):
+    # 'username' maps to 'displayName' conceptually for now, per user request
+    # but the DB field is 'username'.
+    username: str | None = Field(None, min_length=3, max_length=50)
+    email: str | None = None
+
+@router.put("/update_profile")
+def update_profile(
+    profile_update: ProfileUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 1. Update Username if provided and different
+    if profile_update.username and profile_update.username != user.username:
+        # Check uniqueness
+        existing_user = db.query(User).filter(User.username == profile_update.username).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Username already taken")
+        user.username = profile_update.username
+
+    # 2. Update Email if provided and different
+    if profile_update.email and profile_update.email != user.email:
+        # Optional: Check email uniqueness if that's a requirement (not explicitly stated but good practice)
+        # For now, let's assume we just update it.
+        user.email = profile_update.email
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email
+    }
