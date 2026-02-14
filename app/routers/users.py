@@ -349,6 +349,9 @@ def remove_connection(
         Connection.status == "accepted"
     ).first()
 
+    if not conn1 and not conn2:
+        raise HTTPException(status_code=400, detail="Not connected to this user")
+    
     if conn1:
         db.delete(conn1)
     if conn2:
