@@ -380,7 +380,30 @@ def update_profile(
         existing_user = db.query(User).filter(User.username == profile_update.username).first()
         if existing_user:
             raise HTTPException(status_code=400, detail="Username already taken")
-        user.username = profile_update.username
+        old_username = user.username
+        new_username = profile_update.username
+        
+        old_actor = f"{settings.BASE_URL}/users/{old_username}"
+        new_actor = f"{settings.BASE_URL}/users/{new_username}"
+
+        # Update User
+        user.username = new_username
+
+        # Cascade Update 1: Fix 'target_actor' in Connections (where others follow me)
+        db.query(Connection).filter(
+            Connection.target_actor == old_actor
+        ).update(
+            {"target_actor": new_actor},
+            synchronize_session=False
+        )
+
+        # Cascade Update 2: Fix 'author' in Posts
+        db.query(Post).filter(
+            Post.author == old_username
+        ).update(
+            {"author": new_username},
+            synchronize_session=False
+        )
 
     # 2. Update Email if provided and different
     if profile_update.email and profile_update.email != user.email:
