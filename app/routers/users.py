@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from app.database import get_db
@@ -6,6 +6,10 @@ from app.models import User, Post, Connection
 from app.dependencies import get_current_user
 from app.config import settings
 from app.services.federation import build_follow_activity, deliver_raw_activity
+from app.services.supabase_client import supabase
+from PIL import Image
+from io import BytesIO
+import uuid
 
 router = APIRouter()
 
@@ -360,3 +364,47 @@ def remove_connection(
     db.commit()
 
     return {"status": "connection_removed"}
+
+
+ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"]
+MAX_SIZE = 2 * 1024 * 1024  # 2MB
+
+
+@router.post("/users/avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Validate type
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+
+    contents = await file.read()
+
+    # Validate size
+    if len(contents) > MAX_SIZE:
+        raise HTTPException(status_code=400, detail="File too large")
+
+    # Validate actual image
+    try:
+        Image.open(BytesIO(contents)).verify()
+    except:
+        raise HTTPException(status_code=400, detail="Invalid image")
+
+    filename = f"{uuid.uuid4()}.jpg"
+
+    # Upload to Supabase
+    supabase.storage.from_("avatars").upload(
+        filename,
+        contents,
+        {"content-type": file.content_type}
+    )
+
+    public_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/avatars/{filename}"
+
+    # Save to DB
+    user.avatar_url = public_url
+    db.commit()
+
+    return {"avatar_url": public_url}
