@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     BASE_URL : str
     REMOTE_INBOX_URL: Optional[str] = None
     DELIVERY_ENABLED: bool = SEND_TO_OTHER_INSTANCE
+    SUPABASE_SERVICE_KEY: str
+    SUPABASE_URL: str
     
     # Email settings
     EMAIL_PROVIDER: str = "gmail_oauth"  # "gmail_oauth", "smtp"
