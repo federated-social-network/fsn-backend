@@ -30,4 +30,4 @@ pytest-asyncio>=0.23.3
 
 supabase
 alembic
-Pillow
+pillow
