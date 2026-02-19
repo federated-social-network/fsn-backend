@@ -44,9 +44,24 @@ def get_posts(db: Session = Depends(get_db)):
 
 @router.get("/timeline")
 def timeline(db: Session = Depends(get_db)):
-    posts = db.query(Post).order_by(Post.created_at.desc()).all()
-    # ... logic to format response ...
-    return posts
+    results = (
+        db.query(Post, User)
+        .join(User, Post.user_id == User.id)
+        .order_by(Post.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": post.id,
+            "content": post.content,
+            "created_at": post.created_at,
+            "author": user.username,
+            "avatar_url": user.avatar_url
+        }
+        for post, user in results
+    ]
+
 
 @router.get("/timeline_connected_users")
 def timeline_connected_users(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
