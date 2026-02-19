@@ -1,3 +1,4 @@
+from sqlalchemy import desc
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -63,18 +64,46 @@ def timeline(db: Session = Depends(get_db)):
     ]
 
 
+
 @router.get("/timeline_connected_users")
-def timeline_connected_users(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def timeline_connected_users(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Get accepted connections
     connections = db.query(Connection).filter(
         Connection.requester_id == user.id,
         Connection.status == "accepted"
     ).all()
 
-    connected_usernames = [c.target_actor.rstrip("/").split("/")[-1] for c in connections]
-    
-    posts = db.query(Post).filter(Post.author.in_(connected_usernames)).order_by(desc(Post.created_at)).all()
-    
-    return [{"id": p.id, "content": p.content, "author": p.author, "created_at": p.created_at} for p in posts]
+    connected_usernames = [
+        c.target_actor.rstrip("/").split("/")[-1]
+        for c in connections
+    ]
+
+    if not connected_usernames:
+        return []
+
+    # Manual JOIN
+    results = (
+        db.query(Post, User)
+        .join(User, Post.user_id == User.id)
+        .filter(Post.author.in_(connected_usernames))
+        .order_by(desc(Post.created_at))
+        .all()
+    )
+
+    return [
+        {
+            "id": post.id,
+            "content": post.content,
+            "author": user.username,
+            "avatar_url": user.avatar_url,
+            "created_at": post.created_at
+        }
+        for post, user in results
+    ]
+
 
 @router.delete("/delete/{post_id}")
 def delete_post(post_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
