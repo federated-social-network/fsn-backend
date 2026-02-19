@@ -118,7 +118,8 @@ def get_user_profile(
                 "created_at": post.created_at.isoformat()
             }
             for post in posts
-        ]
+        ],
+        "profile_url":db_user.avatar_url
     }
 
 @router.get("/random_users")
@@ -165,7 +166,8 @@ def random_users(
         {
             "id": u.id,
             "username": u.username,
-            "email": u.email
+            "email": u.email,
+            
         }
         for u in users
     ]
