@@ -167,7 +167,7 @@ def random_users(
             "id": u.id,
             "username": u.username,
             "email": u.email,
-            
+            "avatar_url": u.avatar_url
         }
         for u in users
     ]
