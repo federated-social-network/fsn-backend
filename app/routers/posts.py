@@ -84,6 +84,7 @@ def timeline(db: Session = Depends(get_db)):
             "content": post.content,
             "created_at": post.created_at,
             "author": user.username,
+            "image_url": post.image_url,
             "avatar_url": user.avatar_url
         }
         for post, user in results
@@ -125,6 +126,7 @@ def timeline_connected_users(
             "content": post.content,
             "author": user.username,
             "avatar_url": user.avatar_url,
+            "image_url": post.image_url,
             "created_at": post.created_at
         }
         for post, user in results
