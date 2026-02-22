@@ -10,6 +10,7 @@ def build_create_activity(post, base_url):
             "type": "Note",
             "id": f"{base_url}/posts/{post.id}",
             "content": post.content,
+            "image_url": post.image_url,
             "attributedTo": actor_url,
             "published": post.created_at.isoformat()
         }

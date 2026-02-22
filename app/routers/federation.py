@@ -30,6 +30,7 @@ def inbox(activity: dict, db: Session = Depends(get_db)):
     if activity_type == "Create" and obj.get("type") == "Note":
         post_id = obj.get("id")
         content = obj.get("content")
+        image_url = obj.get("image_url")
 
         # prevent duplicates
         existing = db.query(Post).filter(Post.id == post_id).first()
@@ -37,6 +38,7 @@ def inbox(activity: dict, db: Session = Depends(get_db)):
             post = Post(
                 id=post_id,
                 content=content,
+                image_url=image_url,
                 user_id=None,
                 author=actor,
                 origin_instance=actor.split("/users/")[0],
