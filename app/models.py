@@ -16,6 +16,7 @@ class Post(Base):
     id = Column(String, primary_key=True)
     content = Column(Text, nullable=False)
     author = Column(String, nullable=False)
+    image_url = Column(String, nullable=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=True)
     origin_instance = Column(String, nullable=False)
     is_remote = Column(Boolean, default=False)
