@@ -1,6 +1,6 @@
 from sqlalchemy import desc
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from app.database import get_db
@@ -8,14 +8,40 @@ from app.models import Post, User, Activity, Connection
 from app.dependencies import get_current_user
 from app.config import settings
 from app.services.federation import build_create_activity, build_delete_activity, deliver_activity
+from app.services.supabase_client import supabase
+from PIL import Image
+from io import BytesIO
 
 router = APIRouter()
 
 @router.post("/posts")
-def create_post(content: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_post(content: str,image: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    
+    image_url = None
+    
+    contents = await image.read()
+
+    # Validate actual image
+    try:
+        Image.open(BytesIO(contents)).verify()
+    except:
+        raise HTTPException(status_code=400, detail="Invalid image")
+
+    filename = f"{uuid.uuid4()}.jpg"
+
+    # Upload to Supabase
+    supabase.storage.from_("posts").upload(
+        filename,
+        contents,
+        {"content-type": image.content_type}
+    )
+
+    image_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/posts/{filename}"
+
     post = Post(
         id=str(uuid.uuid4()),
         content=content,
+        image_url=image_url,
         user_id=user.id,
         author=user.username,
         origin_instance=settings.INSTANCE_NAME,
