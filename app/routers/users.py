@@ -116,7 +116,8 @@ def get_user_profile(
                 "id": post.id,
                 "content": post.content,
                 "image_url": post.image_url,
-                "created_at": post.created_at.isoformat()
+                "created_at": post.created_at.isoformat(),
+                "like_count":post.like_count
             }
             for post in posts
         ],

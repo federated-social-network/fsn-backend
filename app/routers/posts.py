@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from app.database import get_db
-from app.models import Post, User, Activity, Connection
+from app.models import Post, User, Activity, Connection, Like
 from app.dependencies import get_current_user
 from app.config import settings
 from app.services.federation import build_create_activity, build_delete_activity, deliver_activity
@@ -85,7 +85,8 @@ def timeline(db: Session = Depends(get_db)):
             "created_at": post.created_at,
             "author": user.username,
             "image_url": post.image_url,
-            "avatar_url": user.avatar_url
+            "avatar_url": user.avatar_url,
+            "like_count":post.like_count
         }
         for post, user in results
     ]
@@ -127,7 +128,8 @@ def timeline_connected_users(
             "author": user.username,
             "avatar_url": user.avatar_url,
             "image_url": post.image_url,
-            "created_at": post.created_at
+            "created_at": post.created_at,
+            "like_count":post.like_count
         }
         for post, user in results
     ]
@@ -153,3 +155,59 @@ def delete_post(post_id: str, user: User = Depends(get_current_user), db: Sessio
     db.commit()
     deliver_activity(activity)
     return {"status": "deleted"}
+
+
+@router.post("/posts/{post_id}/like")
+def like_post(
+    post_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    existing = db.query(Like).filter(
+        Like.user_id == user.id,
+        Like.post_id == post_id
+    ).first()
+
+    if existing:
+        raise HTTPException(status_code=400, detail="Already liked")
+
+    like = Like(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        post_id=post_id
+    )
+
+    db.add(like)
+    post.like_count += 1
+
+    db.commit()
+
+    return {"message": "Liked"}
+
+
+@router.delete("/posts/{post_id}/like")
+def unlike_post(
+    post_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    like = db.query(Like).filter(
+        Like.user_id == user.id,
+        Like.post_id == post_id
+    ).first()
+
+    if not like:
+        raise HTTPException(status_code=404, detail="Like not found")
+
+    post = db.query(Post).filter(Post.id == post_id).first()
+
+    db.delete(like)
+    post.like_count = max(0,post.like_count-1)
+
+    db.commit()
+
+    return {"message": "Unliked"}
