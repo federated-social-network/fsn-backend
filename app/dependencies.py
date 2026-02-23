@@ -5,12 +5,16 @@ from app.database import get_db
 from app.config import settings
 from app.models import User
 
+
 def verify_token(token: str):
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
         return payload
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
 
 def get_current_user(authorization: str = Header(...), db: Session = Depends(get_db)):
     if not authorization.startswith("Bearer "):

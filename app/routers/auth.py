@@ -6,11 +6,11 @@ from sqlalchemy.exc import IntegrityError
 from app.database import get_db
 from app.models import User
 from app.auth import (
-    authenticate_user, 
+    authenticate_user,
     create_access_token,
     initiate_password_reset,
     verify_otp,
-    reset_password
+    reset_password,
 )
 from app.config import settings
 
@@ -39,7 +39,7 @@ def register(username: str, password: str, email: str, db: Session = Depends(get
             id=str(uuid.uuid4()),
             username=username,
             password_hash=User.hash_password(password),
-            email=email
+            email=email,
         )
         db.add(user)
         db.commit()
@@ -49,17 +49,20 @@ def register(username: str, password: str, email: str, db: Session = Depends(get
         db.rollback()
         raise HTTPException(status_code=409, detail="username already exists")
 
+
 @router.post("/login")
 def login(username: str, password: str, db: Session = Depends(get_db)):
     user = authenticate_user(username, password, db)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid Credentials")
 
-    token = create_access_token({
-        "user_id": user.id,
-        "username": user.username,
-        "instance": settings.INSTANCE_NAME
-    })
+    token = create_access_token(
+        {
+            "user_id": user.id,
+            "username": user.username,
+            "instance": settings.INSTANCE_NAME,
+        }
+    )
     return {"access_token": token}
 
 
@@ -69,10 +72,10 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
     Initiate password reset by sending OTP to email
     """
     success, message = initiate_password_reset(request.email, db)
-    
+
     if not success:
         raise HTTPException(status_code=404, detail=message)
-    
+
     return {"message": message}
 
 
@@ -82,14 +85,11 @@ def verify_password_otp(request: VerifyOTPRequest, db: Session = Depends(get_db)
     Verify OTP sent to email
     """
     success, message, reset_token = verify_otp(request.email, request.otp, db)
-    
+
     if not success:
         raise HTTPException(status_code=400, detail=message)
-    
-    return {
-        "message": message,
-        "reset_token": reset_token
-    }
+
+    return {"message": message, "reset_token": reset_token}
 
 
 @router.post("/reset-password")
@@ -98,8 +98,8 @@ def reset_user_password(request: ResetPasswordRequest, db: Session = Depends(get
     Reset password using reset token
     """
     success, message = reset_password(request.reset_token, request.new_password, db)
-    
+
     if not success:
         raise HTTPException(status_code=400, detail=message)
-    
+
     return {"message": message}

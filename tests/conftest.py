@@ -1,4 +1,3 @@
-from fastapi import Depends
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
@@ -7,23 +6,22 @@ from app.models import User
 import uuid
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Post, User
 from sqlalchemy import event
-from sqlalchemy.orm import Session
 from app.database import engine, SessionLocal
 
+
 @pytest.fixture
-def client():   
+def client():
     return TestClient(app)
 
 
 @pytest.fixture
 def db():
     connection = engine.connect()
-    transaction = connection.begin()      # outer transaction
+    transaction = connection.begin()  # outer transaction
 
     session = SessionLocal(bind=connection)
-    session.begin_nested()                # SAVEPOINT
+    session.begin_nested()  # SAVEPOINT
 
     @event.listens_for(session, "after_transaction_end")
     def restart_savepoint(sess, trans):
@@ -34,7 +32,7 @@ def db():
         yield session
     finally:
         session.close()
-        transaction.rollback()            # full rollback
+        transaction.rollback()  # full rollback
         connection.close()
 
 
@@ -44,7 +42,7 @@ def fake_user(db: Session):
         id=str(uuid.uuid4()),
         username="testuser7",
         email="test@test.com",
-        password_hash=User.hash_password("testpassword")
+        password_hash=User.hash_password("testpassword"),
     )
     db.add(user)
     db.commit()
@@ -57,6 +55,7 @@ def override_auth(fake_user):
     app.dependency_overrides[get_current_user] = lambda: fake_user
     yield
     app.dependency_overrides.clear()
+
 
 @pytest.fixture(autouse=True)
 def override_db(db):

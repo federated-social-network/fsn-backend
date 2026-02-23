@@ -1,7 +1,14 @@
-from sqlalchemy import Column, String, Boolean, Text, ForeignKey, JSON, Integer, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy import (
+    Column,
+    String,
+    Boolean,
+    Text,
+    ForeignKey,
+    JSON,
+    Integer,
+    UniqueConstraint,
+)
 from app.database import Base
-from app.config import settings
 from passlib.context import CryptContext
 from sqlalchemy.sql import func
 from sqlalchemy import DateTime
@@ -9,6 +16,7 @@ from datetime import datetime
 import uuid
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
 
 class Post(Base):
     __tablename__ = "posts"
@@ -22,27 +30,27 @@ class Post(Base):
     is_remote = Column(Boolean, default=False)
     like_count = Column(Integer, default=0)
     created_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(String,primary_key=True)
-    username = Column(String,unique=True,nullable=False)
-    password_hash = Column(String,nullable=False)
-    email = Column(String,nullable=True)
-    avatar_url = Column(String,nullable=True)
+    id = Column(String, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    email = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
 
     @staticmethod
-    def hash_password(password:str) -> str:
+    def hash_password(password: str) -> str:
         return pwd_context.hash(password)
-    
-    def verify_password(self,password:str) -> bool:
-        return pwd_context.verify(password,self.password_hash)
-    
+
+    def verify_password(self, password: str) -> bool:
+        return pwd_context.verify(password, self.password_hash)
+
+
 class Activity(Base):
     __tablename__ = "activities"
 
@@ -54,14 +62,16 @@ class Activity(Base):
     is_local = Column(Boolean, default=True)
     is_delivered = Column(Boolean, default=False)
 
+
 class Connection(Base):
     __tablename__ = "connections"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     requester_id = Column(String, ForeignKey("users.id"), nullable=False)
     target_actor = Column(String, nullable=False)  # actor URL
-    status = Column(String, default="pending")     # pending | accepted | rejected
+    status = Column(String, default="pending")  # pending | accepted | rejected
     created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class PasswordReset(Base):
     __tablename__ = "password_resets"
@@ -72,6 +82,7 @@ class PasswordReset(Base):
     otp_expires_at = Column(DateTime, nullable=False)
     is_used = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class Like(Base):
     __tablename__ = "likes"

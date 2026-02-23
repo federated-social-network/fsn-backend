@@ -7,6 +7,7 @@ from app.config import settings
 
 router = APIRouter()
 
+
 @router.post("/inbox")
 def inbox(activity: dict, db: Session = Depends(get_db)):
     activity_type = activity.get("type")
@@ -18,11 +19,7 @@ def inbox(activity: dict, db: Session = Depends(get_db)):
 
     # Store activity (remote)
     new_activity = Activity(
-        type=activity_type,
-        actor=actor,
-        object=obj,
-        is_local=False,
-        is_delivered=True
+        type=activity_type, actor=actor, object=obj, is_local=False, is_delivered=True
     )
     db.add(new_activity)
 
@@ -42,7 +39,7 @@ def inbox(activity: dict, db: Session = Depends(get_db)):
                 user_id=None,
                 author=actor,
                 origin_instance=actor.split("/users/")[0],
-                is_remote=True
+                is_remote=True,
             )
             db.add(post)
 
@@ -54,7 +51,7 @@ def inbox(activity: dict, db: Session = Depends(get_db)):
             .filter(Post.is_remote == True)
             .filter(Post.id.endswith(target_id.split("/")[-1]))
             .first()
-        )   
+        )
         if post:
             db.delete(post)
 
@@ -62,7 +59,7 @@ def inbox(activity: dict, db: Session = Depends(get_db)):
         connection = Connection(
             requester_id="REMOTE",  # placeholder
             target_actor=activity["object"],
-            status="pending"
+            status="pending",
         )
         db.add(connection)
 
@@ -71,9 +68,7 @@ def inbox(activity: dict, db: Session = Depends(get_db)):
         actor = follow["actor"]
         target = follow["object"]
 
-        conn = db.query(Connection).filter(
-            Connection.target_actor == actor
-        ).first()
+        conn = db.query(Connection).filter(Connection.target_actor == actor).first()
 
         if conn:
             conn.status = "accepted"
@@ -81,43 +76,43 @@ def inbox(activity: dict, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "accepted"}
 
+
 @router.post("/inbox/delete")
-def delete_remote_post(id:str,db:Session=Depends(get_db)):
-    post = db.query(Post).filter(Post.id==id,Post.is_remote==True).first()
+def delete_remote_post(id: str, db: Session = Depends(get_db)):
+    post = db.query(Post).filter(Post.id == id, Post.is_remote == True).first()
     if not post:
-        return {"status":"ignored"}
+        return {"status": "ignored"}
 
     db.delete(post)
     db.commit()
-    return {"status":"deleted"}
+    return {"status": "deleted"}
+
 
 @router.post("/users/{username}/outbox")
-def outbox(username: str, activity: dict, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def outbox(
+    username: str,
+    activity: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     if user.username != username:
         raise HTTPException(
-            status_code=403,
-            detail="Cannot write to another actor's outbox"
+            status_code=403, detail="Cannot write to another actor's outbox"
         )
 
-    if activity.get("actor") != f"{settings.BASE_URL}/users/{username}": 
-        raise HTTPException(
-            status_code=400,
-            detail="Actor mismatch"
-        )
+    if activity.get("actor") != f"{settings.BASE_URL}/users/{username}":
+        raise HTTPException(status_code=400, detail="Actor mismatch")
 
     new_activity = Activity(
         type=activity.get("type"),
         actor=activity.get("actor"),
         object=activity.get("object"),
         is_local=True,
-        is_delivered=False
+        is_delivered=False,
     )
 
     db.add(new_activity)
     db.commit()
     db.refresh(new_activity)
 
-    return {
-        "status": "stored",
-        "activity_id": new_activity.id
-    }
+    return {"status": "stored", "activity_id": new_activity.id}

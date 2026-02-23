@@ -1,4 +1,3 @@
-import os
 from supabase import create_client
 from app.config import settings
 
