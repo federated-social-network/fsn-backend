@@ -1,4 +1,4 @@
-from sqlalchemy import desc
+from sqlalchemy import and_, desc
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
@@ -80,12 +80,20 @@ def get_posts(db: Session = Depends(get_db)):
 
 
 @router.get("/timeline")
-def timeline(db: Session = Depends(get_db)):
+def timeline(db: Session = Depends(get_db), current_user:User=Depends(get_current_user)):
+    
     results = (
-        db.query(Post, User)
-        .join(User, Post.user_id == User.id)
-        .order_by(Post.created_at.desc())
-        .all()
+    db.query(Post, User, Like.post_id)
+    .join(User, Post.user_id == User.id)
+    .outerjoin(
+        Like,
+        and_(
+            Like.post_id == Post.id,
+            Like.user_id == current_user.id,
+        ),
+    )
+    .order_by(Post.created_at.desc())
+    .all()
     )
 
     return [
@@ -97,8 +105,9 @@ def timeline(db: Session = Depends(get_db)):
             "image_url": post.image_url,
             "avatar_url": user.avatar_url,
             "like_count": post.like_count,
+            "is_liked":liked_post_id is not None
         }
-        for post, user in results
+        for post, user, liked_post_id in results
     ]
 
 
