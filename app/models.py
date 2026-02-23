@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Text, ForeignKey, JSON, Integer
+from sqlalchemy import Column, String, Boolean, Text, ForeignKey, JSON, Integer, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 from app.config import settings
@@ -20,6 +20,7 @@ class Post(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=True)
     origin_instance = Column(String, nullable=False)
     is_remote = Column(Boolean, default=False)
+    like_count = Column(Integer, default=0)
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -71,3 +72,15 @@ class PasswordReset(Base):
     otp_expires_at = Column(DateTime, nullable=False)
     is_used = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class Like(Base):
+    __tablename__ = "likes"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
+    post_id = Column(String, ForeignKey("posts.id", ondelete="CASCADE"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "post_id", name="unique_user_post_like"),
+    )
