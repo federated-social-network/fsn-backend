@@ -15,28 +15,29 @@ from io import BytesIO
 router = APIRouter()
 
 @router.post("/posts")
-async def create_post(content: str,image: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_post(content: str,image: UploadFile = File(None), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     
     image_url = None
     
-    contents = await image.read()
+    if image:
+        contents = await image.read()
 
-    # Validate actual image
-    try:
-        Image.open(BytesIO(contents)).verify()
-    except:
-        raise HTTPException(status_code=400, detail="Invalid image")
+        # Validate actual image
+        try:
+            Image.open(BytesIO(contents)).verify()
+        except:
+            raise HTTPException(status_code=400, detail="Invalid image")
 
-    filename = f"{uuid.uuid4()}.jpg"
+        filename = f"{uuid.uuid4()}.jpg"
 
-    # Upload to Supabase
-    supabase.storage.from_("posts").upload(
-        filename,
-        contents,
-        {"content-type": image.content_type}
-    )
+        # Upload to Supabase
+        supabase.storage.from_("posts").upload(
+            filename,
+            contents,
+            {"content-type": image.content_type}
+        )
 
-    image_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/posts/{filename}"
+        image_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/posts/{filename}"
 
     post = Post(
         id=str(uuid.uuid4()),
