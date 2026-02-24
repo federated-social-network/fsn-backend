@@ -189,9 +189,6 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                     image_url = att.get("url")
                     break
 
-        # Get a friendly author name (username@domain) instead of raw URL
-        author_display = _get_friendly_actor_name(actor)
-
         existing = db.query(Post).filter(Post.id == post_id).first()
         if not existing:
             post = Post(
@@ -199,7 +196,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                 content=content,
                 image_url=image_url,
                 user_id=None,
-                author=author_display,
+                author=actor,  # Store raw actor URL for matching with connections
                 origin_instance=actor.split("/users/")[0] if "/users/" in actor else actor,
                 is_remote=True,
             )

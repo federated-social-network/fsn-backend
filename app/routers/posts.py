@@ -165,7 +165,7 @@ def timeline_connected_users(
         {
             "id": post.id,
             "content": post.content,
-            "author": u.username if u else post.author,
+            "author": u.username if u else _format_remote_author(post.author),
             "avatar_url": u.avatar_url if u else None,
             "image_url": post.image_url,
             "created_at": post.created_at,
@@ -174,6 +174,17 @@ def timeline_connected_users(
         }
         for post, u in all_results
     ]
+
+
+def _format_remote_author(actor_url: str) -> str:
+    """Format a remote actor URL like 'https://mastodon.social/users/alice' to 'alice@mastodon.social'."""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(actor_url)
+        username = actor_url.rstrip("/").split("/")[-1]
+        return f"{username}@{parsed.hostname}"
+    except Exception:
+        return actor_url
 
 
 @router.delete("/delete/{post_id}")

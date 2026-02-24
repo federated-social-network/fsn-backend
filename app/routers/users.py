@@ -19,16 +19,22 @@ def search_users(
     q: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
-    Fast prefix-based user search using SQL ILIKE.
-    Returns users whose username starts with the query string (case-insensitive).
-    Includes connection status and self-detection.
+    Search for users. Supports:
+    - Local prefix search: "alice" → finds local users starting with 'alice'
+    - Remote handle lookup: "alice@mastodon.social" → resolves via WebFinger
     """
     if not q or not q.strip():
         return []
 
-    search_pattern = f"{q.strip()}%"
+    q = q.strip().lstrip("@")
 
-    # Get matching users using ILIKE for case-insensitive prefix search
+    # --- Remote handle lookup (contains @) ---
+    if "@" in q:
+        return _search_remote_user(q, user, db)
+
+    # --- Local prefix search ---
+    search_pattern = f"{q}%"
+
     matching_users = (
         db.query(User).filter(User.username.ilike(search_pattern)).limit(10).all()
     )
@@ -82,10 +88,104 @@ def search_users(
             status = "none"
 
         results.append(
-            {"id": u.id, "username": u.username, "email": u.email, "status": status}
+            {
+                "id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "status": status,
+                "is_remote": False,
+            }
         )
 
     return results
+
+
+def _search_remote_user(handle: str, user, db):
+    """
+    Resolve a remote user handle via WebFinger and return search results.
+    """
+    import httpx
+
+    handle = handle.lstrip("@")
+    parts = handle.split("@", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return []
+
+    remote_username, remote_domain = parts
+
+    # Check if we already have a connection to this remote user
+    # We need to resolve the actor URL first
+    webfinger_url = (
+        f"https://{remote_domain}/.well-known/webfinger?resource=acct:{handle}"
+    )
+
+    try:
+        wf_resp = httpx.get(webfinger_url, timeout=10)
+        if wf_resp.status_code != 200:
+            return []
+        wf_data = wf_resp.json()
+    except Exception:
+        return []
+
+    # Extract actor URL
+    actor_url = None
+    for link in wf_data.get("links", []):
+        if link.get("rel") == "self" and "activity" in link.get("type", ""):
+            actor_url = link["href"]
+            break
+
+    if not actor_url:
+        return []
+
+    # Fetch actor profile for display info
+    display_name = f"{remote_username}@{remote_domain}"
+    avatar_url = None
+    try:
+        actor_resp = httpx.get(
+            actor_url,
+            headers={"Accept": "application/activity+json"},
+            timeout=10,
+        )
+        if actor_resp.status_code == 200:
+            actor_data = actor_resp.json()
+            preferred = actor_data.get("preferredUsername", remote_username)
+            name = actor_data.get("name", preferred)
+            display_name = f"{preferred}@{remote_domain}"
+
+            # Get avatar
+            icon = actor_data.get("icon")
+            if icon and isinstance(icon, dict):
+                avatar_url = icon.get("url")
+    except Exception:
+        pass
+
+    # Check existing connection status
+    existing = (
+        db.query(Connection)
+        .filter(
+            Connection.local_user_id == user.id,
+            Connection.remote_actor_url == actor_url,
+        )
+        .first()
+    )
+
+    if existing:
+        status = existing.status  # "pending" or "accepted"
+    else:
+        status = "none"
+
+    return [
+        {
+            "id": None,
+            "username": display_name,
+            "email": None,
+            "status": status,
+            "is_remote": True,
+            "actor_url": actor_url,
+            "avatar_url": avatar_url,
+            "handle": handle,
+        }
+    ]
 
 
 @router.get("/get_current_user")
@@ -215,6 +315,142 @@ def connect_user(
         deliver_raw_activity(follow_activity, user=user)
 
     return {"status": "request_sent", "connection_id": connection.id}
+
+
+@router.post("/connect/remote")
+def connect_remote_user(
+    handle: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Follow a remote user (e.g., alice@mastodon.social).
+    Resolves via WebFinger, fetches actor profile, sends signed Follow.
+    """
+    import httpx
+    import json
+    from urllib.parse import urlparse
+    from app.services.crypto import sign_request
+
+    # Parse handle: "alice@mastodon.social" or "@alice@mastodon.social"
+    handle = handle.lstrip("@")
+    if "@" not in handle:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid handle. Use format: username@domain.com",
+        )
+
+    remote_username, remote_domain = handle.split("@", 1)
+
+    # Step 1: WebFinger lookup
+    webfinger_url = f"https://{remote_domain}/.well-known/webfinger?resource=acct:{handle}"
+    try:
+        wf_resp = httpx.get(webfinger_url, timeout=10)
+        if wf_resp.status_code != 200:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Could not find user {handle} via WebFinger",
+            )
+        wf_data = wf_resp.json()
+    except httpx.RequestError:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not reach {remote_domain}",
+        )
+
+    # Extract actor URL from WebFinger links
+    actor_url = None
+    for link in wf_data.get("links", []):
+        if link.get("rel") == "self" and "activity" in link.get("type", ""):
+            actor_url = link["href"]
+            break
+
+    if not actor_url:
+        raise HTTPException(status_code=404, detail="Actor URL not found in WebFinger")
+
+    # Step 2: Fetch actor profile for inbox URL
+    try:
+        actor_resp = httpx.get(
+            actor_url,
+            headers={"Accept": "application/activity+json"},
+            timeout=10,
+        )
+        if actor_resp.status_code != 200:
+            raise HTTPException(
+                status_code=404,
+                detail="Could not fetch remote actor profile",
+            )
+        actor_data = actor_resp.json()
+    except httpx.RequestError:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not reach remote actor",
+        )
+
+    remote_inbox = actor_data.get("inbox")
+    if not remote_inbox:
+        raise HTTPException(status_code=400, detail="Remote actor has no inbox")
+
+    # Step 3: Check for duplicate connection
+    existing = (
+        db.query(Connection)
+        .filter(
+            Connection.local_user_id == user.id,
+            Connection.remote_actor_url == actor_url,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="Already following this user")
+
+    # Step 4: Create connection
+    connection = Connection(
+        local_user_id=user.id,
+        target_local_user_id=None,
+        remote_actor_url=actor_url,
+        remote_inbox_url=remote_inbox,
+        status="pending",
+    )
+    db.add(connection)
+    db.commit()
+    db.refresh(connection)
+
+    # Step 5: Send signed Follow activity to remote inbox
+    my_actor_url = f"{settings.BASE_URL}/users/{user.username}"
+    follow_activity = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": f"{my_actor_url}/follows/{connection.id}",
+        "type": "Follow",
+        "actor": my_actor_url,
+        "object": actor_url,
+    }
+
+    if user.private_key:
+        try:
+            body = json.dumps(follow_activity).encode("utf-8")
+            key_id = f"{my_actor_url}#main-key"
+            signed_headers = sign_request(
+                private_key_pem=user.private_key,
+                method="POST",
+                url=remote_inbox,
+                body=body,
+                key_id=key_id,
+            )
+            httpx.post(
+                remote_inbox,
+                content=body,
+                headers=signed_headers,
+                timeout=10,
+            )
+        except Exception:
+            pass  # Best-effort delivery
+
+    return {
+        "status": "follow_sent",
+        "connection_id": connection.id,
+        "remote_actor": actor_url,
+        "remote_username": f"{remote_username}@{remote_domain}",
+    }
 
 
 @router.post("/connect/accept/{connection_id}")
