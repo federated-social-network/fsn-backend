@@ -42,6 +42,9 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     email = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
+    # ActivityPub RSA key pair (PEM format, generated on first actor request)
+    rsa_private_key = Column(Text, nullable=True)
+    rsa_public_key = Column(Text, nullable=True)
 
     @staticmethod
     def hash_password(password: str) -> str:
