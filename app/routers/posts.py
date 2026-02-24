@@ -122,15 +122,19 @@ def timeline_connected_users(
         .all()
     )
 
-    # Collect connected local user IDs and remote actor URLs
+    # Collect connected local user IDs and remote actor info
     connected_local_user_ids = []
-    connected_remote_actors = []
+    connected_remote_actors = []  # raw actor URLs
+    connected_remote_instances = []  # origin instance base URLs
 
     for c in connections:
         if c.target_local_user_id:
             connected_local_user_ids.append(c.target_local_user_id)
         elif c.remote_actor_url:
             connected_remote_actors.append(c.remote_actor_url)
+            # Extract origin instance base URL
+            base = c.remote_actor_url.split("/users/")[0] if "/users/" in c.remote_actor_url else c.remote_actor_url
+            connected_remote_instances.append(base)
 
     if not connected_local_user_ids and not connected_remote_actors:
         return []
@@ -147,11 +151,18 @@ def timeline_connected_users(
         )
 
     # Get posts from connected remote actors
+    # Match by both raw actor URL and origin_instance (covers both old and new storage formats)
     remote_results = []
     if connected_remote_actors:
         remote_posts = (
             db.query(Post)
-            .filter(Post.is_remote == True, Post.author.in_(connected_remote_actors))
+            .filter(
+                Post.is_remote == True,
+                or_(
+                    Post.author.in_(connected_remote_actors),
+                    Post.origin_instance.in_(connected_remote_instances),
+                ),
+            )
             .order_by(desc(Post.created_at))
             .all()
         )
@@ -164,8 +175,8 @@ def timeline_connected_users(
     return [
         {
             "id": post.id,
-            "content": post.content,
-            "author": u.username if u else _format_remote_author(post.author),
+            "content": _strip_html_for_display(post.content),
+            "author": u.username if u else post.author,
             "avatar_url": u.avatar_url if u else None,
             "image_url": post.image_url,
             "created_at": post.created_at,
@@ -176,15 +187,18 @@ def timeline_connected_users(
     ]
 
 
-def _format_remote_author(actor_url: str) -> str:
-    """Format a remote actor URL like 'https://mastodon.social/users/alice' to 'alice@mastodon.social'."""
-    try:
-        from urllib.parse import urlparse
-        parsed = urlparse(actor_url)
-        username = actor_url.rstrip("/").split("/")[-1]
-        return f"{username}@{parsed.hostname}"
-    except Exception:
-        return actor_url
+def _strip_html_for_display(content: str) -> str:
+    """Strip any remaining HTML from post content for clean display."""
+    if not content:
+        return content
+    import re
+    # If content looks like it has HTML tags, strip them
+    if "<" in content and ">" in content:
+        text = re.sub(r'<br\s*/?>', '\n', content)
+        text = re.sub(r'</p>\s*<p>', '\n\n', text)
+        text = re.sub(r'<[^>]+>', '', text)
+        return text.strip()
+    return content
 
 
 @router.delete("/delete/{post_id}")

@@ -1,4 +1,5 @@
 import json
+import re
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import JSONResponse
@@ -9,6 +10,46 @@ from app.dependencies import get_current_user
 from app.config import settings
 from app.services.crypto import sign_request, verify_http_signature
 from urllib.parse import urlparse
+
+
+def _strip_html(html: str) -> str:
+    """Strip HTML tags from content, keeping only text."""
+    if not html:
+        return html
+    # Remove HTML tags
+    text = re.sub(r'<br\s*/?>', '\n', html)  # Convert <br> to newline
+    text = re.sub(r'</p>\s*<p>', '\n\n', text)  # Convert paragraph breaks
+    text = re.sub(r'<[^>]+>', '', text)  # Remove all remaining tags
+    text = text.strip()
+    return text
+
+
+def _resolve_actor_display_name(actor_url: str) -> str:
+    """Fetch preferredUsername from actor profile and return username@domain."""
+    try:
+        parsed = urlparse(actor_url)
+        domain = parsed.hostname
+
+        resp = httpx.get(
+            actor_url,
+            headers={"Accept": "application/activity+json"},
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            actor_data = resp.json()
+            preferred = actor_data.get("preferredUsername")
+            if preferred:
+                return f"{preferred}@{domain}"
+    except Exception:
+        pass
+
+    # Fallback: extract from URL
+    try:
+        parsed = urlparse(actor_url)
+        path_username = actor_url.rstrip("/").split("/")[-1]
+        return f"{path_username}@{parsed.hostname}"
+    except Exception:
+        return actor_url
 
 router = APIRouter()
 
@@ -179,15 +220,18 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
     # Handle Create (Note)
     if activity_type == "Create" and isinstance(obj, dict) and obj.get("type") == "Note":
         post_id = obj.get("id")
-        content = obj.get("content")
+        content = _strip_html(obj.get("content", ""))
         image_url = obj.get("image_url")
 
         # Check for image in attachment array (Mastodon format)
         if not image_url and obj.get("attachment"):
             for att in obj["attachment"]:
-                if att.get("type") == "Image":
+                if att.get("type") in ("Image", "Document"):
                     image_url = att.get("url")
                     break
+
+        # Resolve friendly author name (preferredUsername@domain)
+        author_display = _resolve_actor_display_name(actor)
 
         existing = db.query(Post).filter(Post.id == post_id).first()
         if not existing:
@@ -196,7 +240,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                 content=content,
                 image_url=image_url,
                 user_id=None,
-                author=actor,  # Store raw actor URL for matching with connections
+                author=author_display,
                 origin_instance=actor.split("/users/")[0] if "/users/" in actor else actor,
                 is_remote=True,
             )
@@ -313,7 +357,7 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
     This is called when a follow is accepted so user sees existing posts.
     """
     try:
-        # Fetch actor profile to get outbox URL
+        # Fetch actor profile to get outbox URL and preferredUsername
         actor_resp = httpx.get(
             actor_url,
             headers={"Accept": "application/activity+json"},
@@ -326,6 +370,16 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
         outbox_url = actor_data.get("outbox")
         if not outbox_url:
             return
+
+        # Build friendly author name from actor profile
+        parsed = urlparse(actor_url)
+        domain = parsed.hostname
+        preferred = actor_data.get("preferredUsername", "")
+        if preferred:
+            author_display = f"{preferred}@{domain}"
+        else:
+            path_name = actor_url.rstrip("/").split("/")[-1]
+            author_display = f"{path_name}@{domain}"
 
         # Fetch outbox collection
         outbox_resp = httpx.get(
@@ -373,7 +427,7 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
                     continue
 
                 post_id = note.get("id")
-                content = note.get("content")
+                content = _strip_html(note.get("content", ""))
 
                 if not post_id or not content:
                     continue
@@ -390,14 +444,12 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
                         image_url = att.get("url")
                         break
 
-                attributed_to = note.get("attributedTo", actor_url)
-
                 post = Post(
                     id=post_id,
                     content=content,
                     image_url=image_url,
                     user_id=None,
-                    author=attributed_to if isinstance(attributed_to, str) else actor_url,
+                    author=author_display,
                     origin_instance=actor_url.split("/users/")[0] if "/users/" in actor_url else actor_url,
                     is_remote=True,
                 )
