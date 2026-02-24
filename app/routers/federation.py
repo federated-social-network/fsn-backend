@@ -277,6 +277,9 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
 
         if conn:
             conn.status = "accepted"
+            db.commit()
+            # Fetch existing posts from the remote user's outbox
+            _fetch_remote_outbox_posts(accepting_actor, db)
 
     # Handle Undo (e.g., unfollow)
     if activity_type == "Undo" and isinstance(obj, dict) and obj.get("type") == "Follow":
@@ -289,7 +292,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                 conn = (
                     db.query(Connection)
                     .filter(
-                        Connection.target_local_user_id == target_user.id,
+                        Connection.local_user_id == target_user.id,
                         Connection.remote_actor_url == actor,
                     )
                     .first()
@@ -299,6 +302,188 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
 
     db.commit()
     return {"status": "accepted"}
+
+
+# ---------------------------------------------------------------------------
+# Fetch remote outbox posts
+# ---------------------------------------------------------------------------
+def _fetch_remote_outbox_posts(actor_url: str, db: Session):
+    """
+    Fetch existing posts from a remote actor's outbox and store them locally.
+    This is called when a follow is accepted so user sees existing posts.
+    """
+    try:
+        # Fetch actor profile to get outbox URL
+        actor_resp = httpx.get(
+            actor_url,
+            headers={"Accept": "application/activity+json"},
+            timeout=10,
+        )
+        if actor_resp.status_code != 200:
+            return
+
+        actor_data = actor_resp.json()
+        outbox_url = actor_data.get("outbox")
+        if not outbox_url:
+            return
+
+        # Fetch outbox collection
+        outbox_resp = httpx.get(
+            outbox_url,
+            headers={"Accept": "application/activity+json"},
+            timeout=10,
+        )
+        if outbox_resp.status_code != 200:
+            return
+
+        outbox_data = outbox_resp.json()
+
+        # Handle OrderedCollection — get first page
+        items = outbox_data.get("orderedItems", [])
+        if not items and outbox_data.get("first"):
+            first_url = outbox_data["first"]
+            if isinstance(first_url, str):
+                page_resp = httpx.get(
+                    first_url,
+                    headers={"Accept": "application/activity+json"},
+                    timeout=10,
+                )
+                if page_resp.status_code == 200:
+                    page_data = page_resp.json()
+                    items = page_data.get("orderedItems", [])
+
+        # Process items (limit to 20 most recent)
+        for item in items[:20]:
+            try:
+                activity_obj = item
+                if isinstance(item, str):
+                    continue
+
+                item_type = activity_obj.get("type", "")
+
+                # Handle both wrapped (Create) and unwrapped (Note) activities
+                if item_type == "Create":
+                    note = activity_obj.get("object", {})
+                elif item_type == "Note":
+                    note = activity_obj
+                else:
+                    continue
+
+                if not isinstance(note, dict) or note.get("type") != "Note":
+                    continue
+
+                post_id = note.get("id")
+                content = note.get("content")
+
+                if not post_id or not content:
+                    continue
+
+                # Skip if already exists
+                existing = db.query(Post).filter(Post.id == post_id).first()
+                if existing:
+                    continue
+
+                # Extract image from attachments
+                image_url = None
+                for att in note.get("attachment", []):
+                    if att.get("type") in ("Image", "Document"):
+                        image_url = att.get("url")
+                        break
+
+                attributed_to = note.get("attributedTo", actor_url)
+
+                post = Post(
+                    id=post_id,
+                    content=content,
+                    image_url=image_url,
+                    user_id=None,
+                    author=attributed_to if isinstance(attributed_to, str) else actor_url,
+                    origin_instance=actor_url.split("/users/")[0] if "/users/" in actor_url else actor_url,
+                    is_remote=True,
+                )
+                db.add(post)
+
+            except Exception:
+                continue
+
+        db.commit()
+
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Debug: show connection statuses
+# ---------------------------------------------------------------------------
+@router.get("/debug/connections")
+def debug_connections(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Debug endpoint to view all connections and their statuses."""
+    connections = (
+        db.query(Connection)
+        .filter(Connection.local_user_id == user.id)
+        .all()
+    )
+
+    return [
+        {
+            "id": conn.id,
+            "local_user_id": conn.local_user_id,
+            "target_local_user_id": conn.target_local_user_id,
+            "remote_actor_url": conn.remote_actor_url,
+            "remote_inbox_url": conn.remote_inbox_url,
+            "status": conn.status,
+            "created_at": str(conn.created_at) if conn.created_at else None,
+        }
+        for conn in connections
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Sync: manually pull posts from followed remote users
+# ---------------------------------------------------------------------------
+@router.post("/sync/remote_posts")
+def sync_remote_posts(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Manually sync posts from all followed remote users.
+    Fetches their outbox and stores any new posts.
+    """
+    connections = (
+        db.query(Connection)
+        .filter(
+            Connection.local_user_id == user.id,
+            Connection.remote_actor_url.isnot(None),
+            Connection.status.in_(["accepted", "pending"]),
+        )
+        .all()
+    )
+
+    synced = 0
+    for conn in connections:
+        before_count = db.query(Post).filter(
+            Post.is_remote == True,
+            Post.author == conn.remote_actor_url,
+        ).count()
+
+        _fetch_remote_outbox_posts(conn.remote_actor_url, db)
+
+        after_count = db.query(Post).filter(
+            Post.is_remote == True,
+            Post.author == conn.remote_actor_url,
+        ).count()
+
+        synced += (after_count - before_count)
+
+    return {
+        "status": "synced",
+        "remote_connections": len(connections),
+        "new_posts_fetched": synced,
+    }
 
 
 def _send_accept(local_user: User, follow_activity: dict, remote_actor_url: str):
