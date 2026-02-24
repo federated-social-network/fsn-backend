@@ -1,4 +1,4 @@
-from sqlalchemy import and_, desc
+from sqlalchemy import and_, desc, or_
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
