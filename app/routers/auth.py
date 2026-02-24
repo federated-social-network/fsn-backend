@@ -13,6 +13,7 @@ from app.auth import (
     reset_password,
 )
 from app.config import settings
+from app.services.crypto import generate_rsa_keypair
 
 
 router = APIRouter()
@@ -35,11 +36,14 @@ class ResetPasswordRequest(BaseModel):
 @router.post("/register")
 def register(username: str, password: str, email: str, db: Session = Depends(get_db)):
     try:
+        private_key, public_key = generate_rsa_keypair()
         user = User(
             id=str(uuid.uuid4()),
             username=username,
             password_hash=User.hash_password(password),
             email=email,
+            public_key=public_key,
+            private_key=private_key,
         )
         db.add(user)
         db.commit()

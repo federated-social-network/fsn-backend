@@ -42,6 +42,8 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     email = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
+    public_key = Column(Text, nullable=True)
+    private_key = Column(Text, nullable=True)
 
     @staticmethod
     def hash_password(password: str) -> str:
@@ -67,9 +69,11 @@ class Connection(Base):
     __tablename__ = "connections"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    requester_id = Column(String, ForeignKey("users.id"), nullable=False)
-    target_actor = Column(String, nullable=False)  # actor URL
-    status = Column(String, default="pending")  # pending | accepted | rejected
+    local_user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    target_local_user_id = Column(String, ForeignKey("users.id"), nullable=True)
+    remote_actor_url = Column(String, nullable=True)
+    remote_inbox_url = Column(String, nullable=True)
+    status = Column(String, default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

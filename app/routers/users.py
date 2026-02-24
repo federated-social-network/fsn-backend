@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, or_
 from app.database import get_db
 from app.models import User, Post, Connection
 from app.dependencies import get_current_user
@@ -36,37 +36,47 @@ def search_users(
     if not matching_users:
         return []
 
-    my_actor = f"{settings.BASE_URL}/users/{user.username}"
-
-    # Get all connected actors for current user
-    connected_actors = set()
+    # Get all connected local user IDs for current user (accepted)
+    connected_ids = set()
     connections = (
         db.query(Connection)
-        .filter(Connection.requester_id == user.id, Connection.status == "accepted")
+        .filter(Connection.local_user_id == user.id, Connection.status == "accepted")
         .all()
     )
     for conn in connections:
-        connected_actors.add(conn.target_actor)
+        if conn.target_local_user_id:
+            connected_ids.add(conn.target_local_user_id)
 
-    # Get pending connection actors
-    pending_actors = set()
+    # Also check reverse direction (someone connected to me, accepted)
+    reverse_connections = (
+        db.query(Connection)
+        .filter(
+            Connection.target_local_user_id == user.id,
+            Connection.status == "accepted",
+        )
+        .all()
+    )
+    for conn in reverse_connections:
+        connected_ids.add(conn.local_user_id)
+
+    # Get pending connection target IDs
+    pending_ids = set()
     pending_connections = (
         db.query(Connection)
-        .filter(Connection.requester_id == user.id, Connection.status == "pending")
+        .filter(Connection.local_user_id == user.id, Connection.status == "pending")
         .all()
     )
     for conn in pending_connections:
-        pending_actors.add(conn.target_actor)
+        if conn.target_local_user_id:
+            pending_ids.add(conn.target_local_user_id)
 
     results = []
     for u in matching_users:
-        user_actor = f"{settings.BASE_URL}/users/{u.username}"
-
         if u.id == user.id:
             status = "self"
-        elif user_actor in connected_actors:
+        elif u.id in connected_ids:
             status = "connected"
-        elif user_actor in pending_actors:
+        elif u.id in pending_ids:
             status = "pending"
         else:
             status = "none"
@@ -119,27 +129,29 @@ def get_user_profile(
 
 @router.get("/random_users")
 def random_users(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    my_actor = f"{settings.BASE_URL}/users/{user.username}"
-
-    # All actors I have ANY connection with (pending or accepted)
-    connected_actors = (
-        db.query(Connection.target_actor)
-        .filter(Connection.requester_id == user.id)
-        .union(
-            db.query(func.concat(settings.BASE_URL, "/users/", User.username))
-            .join(Connection, Connection.requester_id == User.id)
-            .filter(Connection.target_actor == my_actor)
+    # All local user IDs I have ANY connection with (pending or accepted), either direction
+    connected_user_ids_outgoing = (
+        db.query(Connection.target_local_user_id)
+        .filter(
+            Connection.local_user_id == user.id,
+            Connection.target_local_user_id.isnot(None),
         )
-        .subquery()
     )
+
+    connected_user_ids_incoming = (
+        db.query(Connection.local_user_id)
+        .filter(Connection.target_local_user_id == user.id)
+    )
+
+    connected_user_ids = connected_user_ids_outgoing.union(
+        connected_user_ids_incoming
+    ).subquery()
 
     users = (
         db.query(User)
         .filter(
             User.id != user.id,  # exclude self
-            ~func.concat(settings.BASE_URL, "/users/", User.username).in_(
-                connected_actors
-            ),
+            ~User.id.in_(connected_user_ids),
         )
         .order_by(func.random())
         .limit(5)
@@ -168,12 +180,12 @@ def connect_user(
     if target.id == user.id:
         raise HTTPException(status_code=400, detail="Cannot connect to yourself")
 
-    target_actor = f"{settings.BASE_URL}/users/{username}"
-
+    # Check if connection already exists in either direction
     existing = (
         db.query(Connection)
         .filter(
-            Connection.requester_id == user.id, Connection.target_actor == target_actor
+            Connection.local_user_id == user.id,
+            Connection.target_local_user_id == target.id,
         )
         .first()
     )
@@ -182,22 +194,25 @@ def connect_user(
         raise HTTPException(status_code=400, detail="Request already sent")
 
     connection = Connection(
-        requester_id=user.id, target_actor=target_actor, status="pending"
+        local_user_id=user.id,
+        target_local_user_id=target.id,
+        status="pending",
     )
 
     db.add(connection)
     db.commit()
     db.refresh(connection)
 
-    # 🔹 Build Follow activity
+    # Build Follow activity
+    target_actor = f"{settings.BASE_URL}/users/{username}"
     follow_activity = build_follow_activity(
         actor_url=f"{settings.BASE_URL}/users/{user.username}",
         target_actor=target_actor,
     )
 
-    # 🔹 Deliver ONLY if enabled
+    # Deliver ONLY if enabled
     if settings.SEND_TO_OTHER_INSTANCE:
-        deliver_raw_activity(follow_activity)
+        deliver_raw_activity(follow_activity, user=user)
 
     return {"status": "request_sent", "connection_id": connection.id}
 
@@ -217,20 +232,17 @@ def accept_connection(
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
 
-    my_actor = f"{settings.BASE_URL}/users/{user.username}"
-
-    # Ensure the logged-in user is the target
-    if connection.target_actor != my_actor:
+    # Ensure the logged-in user is the target of this connection request
+    if connection.target_local_user_id != user.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
-    # 1️⃣ Mark original request as accepted
+    # Mark original request as accepted
     connection.status = "accepted"
 
-    # 2️⃣ Create mirror connection (THIS IS THE FIX)
+    # Create mirror connection (so both users see each other as connected)
     mirror = Connection(
-        requester_id=user.id,
-        target_actor=f"{settings.BASE_URL}/users/"
-        + (db.query(User).filter(User.id == connection.requester_id).first().username),
+        local_user_id=user.id,
+        target_local_user_id=connection.local_user_id,
         status="accepted",
     )
 
@@ -244,25 +256,39 @@ def accept_connection(
 def pending_connections(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    my_actor = f"{settings.BASE_URL}/users/{user.username}"
-
+    # Find connections where I am the target and status is pending
     pending = (
         db.query(Connection)
-        .filter(Connection.target_actor == my_actor, Connection.status == "pending")
+        .filter(
+            Connection.target_local_user_id == user.id,
+            Connection.status == "pending",
+        )
         .all()
     )
 
     results = []
 
     for conn in pending:
-        requester = db.query(User).filter(User.id == conn.requester_id).first()
-
-        if requester:
+        # For local connections, look up the requester
+        if conn.local_user_id:
+            requester = db.query(User).filter(User.id == conn.local_user_id).first()
+            if requester:
+                results.append(
+                    {
+                        "connection_id": conn.id,
+                        "from_user_id": requester.id,
+                        "from_username": requester.username,
+                        "is_remote": False,
+                    }
+                )
+        # For remote connections (follow from remote instance)
+        elif conn.remote_actor_url:
             results.append(
                 {
                     "connection_id": conn.id,
-                    "from_user_id": requester.id,
-                    "from_username": requester.username,
+                    "from_user_id": None,
+                    "from_username": conn.remote_actor_url,
+                    "is_remote": True,
                 }
             )
 
@@ -273,11 +299,13 @@ def pending_connections(
 def count_connections(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    my_actor = f"{settings.BASE_URL}/users/{user.username}"
-
+    # Count accepted connections where I am the local_user_id
     count = (
         db.query(Connection)
-        .filter(Connection.target_actor == my_actor, Connection.status == "accepted")
+        .filter(
+            Connection.local_user_id == user.id,
+            Connection.status == "accepted",
+        )
         .count()
     )
 
@@ -288,21 +316,41 @@ def count_connections(
 def list_connections(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    my_actor = f"{settings.BASE_URL}/users/{user.username}"
-
+    # Get accepted connections where I am the local_user_id
     connections = (
         db.query(Connection)
-        .filter(Connection.target_actor == my_actor, Connection.status == "accepted")
+        .filter(
+            Connection.local_user_id == user.id,
+            Connection.status == "accepted",
+        )
         .all()
     )
 
     results = []
 
     for conn in connections:
-        requester = db.query(User).filter(User.id == conn.requester_id).first()
-
-        if requester:
-            results.append({"user_id": requester.id, "username": requester.username})
+        if conn.target_local_user_id:
+            # Local connection — look up the user
+            target = (
+                db.query(User).filter(User.id == conn.target_local_user_id).first()
+            )
+            if target:
+                results.append(
+                    {
+                        "user_id": target.id,
+                        "username": target.username,
+                        "is_remote": False,
+                    }
+                )
+        elif conn.remote_actor_url:
+            # Remote connection
+            results.append(
+                {
+                    "user_id": None,
+                    "username": conn.remote_actor_url,
+                    "is_remote": True,
+                }
+            )
 
     return results
 
@@ -315,26 +363,23 @@ def remove_connection(
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    target_actor = f"{settings.BASE_URL}/users/{username}"
-    my_actor = f"{settings.BASE_URL}/users/{user.username}"
-
     # Remove my request to target
     conn1 = (
         db.query(Connection)
         .filter(
-            Connection.requester_id == user.id,
-            Connection.target_actor == target_actor,
+            Connection.local_user_id == user.id,
+            Connection.target_local_user_id == target_user.id,
             Connection.status == "accepted",
         )
         .first()
     )
 
-    # Remove target's request to me
+    # Remove target's request to me (mirror)
     conn2 = (
         db.query(Connection)
         .filter(
-            Connection.requester_id == target_user.id,
-            Connection.target_actor == my_actor,
+            Connection.local_user_id == target_user.id,
+            Connection.target_local_user_id == user.id,
             Connection.status == "accepted",
         )
         .first()

@@ -70,7 +70,7 @@ async def create_post(
     db.add(activity)
     db.commit()
 
-    deliver_activity(activity)
+    deliver_activity(activity, user=user)
     return post
 
 
@@ -115,40 +115,64 @@ def timeline(db: Session = Depends(get_db), current_user:User=Depends(get_curren
 def timeline_connected_users(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    # Get accepted connections
+    # Get accepted connections where I am the local_user_id
     connections = (
         db.query(Connection)
-        .filter(Connection.requester_id == user.id, Connection.status == "accepted")
+        .filter(Connection.local_user_id == user.id, Connection.status == "accepted")
         .all()
     )
 
-    connected_usernames = [
-        c.target_actor.rstrip("/").split("/")[-1] for c in connections
-    ]
+    # Collect connected local user IDs and remote actor URLs
+    connected_local_user_ids = []
+    connected_remote_actors = []
 
-    if not connected_usernames:
+    for c in connections:
+        if c.target_local_user_id:
+            connected_local_user_ids.append(c.target_local_user_id)
+        elif c.remote_actor_url:
+            connected_remote_actors.append(c.remote_actor_url)
+
+    if not connected_local_user_ids and not connected_remote_actors:
         return []
 
-    # Manual JOIN
-    results = (
-        db.query(Post, User)
-        .join(User, Post.user_id == User.id)
-        .filter(Post.author.in_(connected_usernames))
-        .order_by(desc(Post.created_at))
-        .all()
-    )
+    # Get posts from connected local users
+    local_results = []
+    if connected_local_user_ids:
+        local_results = (
+            db.query(Post, User)
+            .join(User, Post.user_id == User.id)
+            .filter(Post.user_id.in_(connected_local_user_ids))
+            .order_by(desc(Post.created_at))
+            .all()
+        )
+
+    # Get posts from connected remote actors
+    remote_results = []
+    if connected_remote_actors:
+        remote_posts = (
+            db.query(Post)
+            .filter(Post.is_remote == True, Post.author.in_(connected_remote_actors))
+            .order_by(desc(Post.created_at))
+            .all()
+        )
+        remote_results = [(post, None) for post in remote_posts]
+
+    # Combine and sort by created_at
+    all_results = local_results + remote_results
+    all_results.sort(key=lambda x: x[0].created_at, reverse=True)
 
     return [
         {
             "id": post.id,
             "content": post.content,
-            "author": user.username,
-            "avatar_url": user.avatar_url,
+            "author": u.username if u else post.author,
+            "avatar_url": u.avatar_url if u else None,
             "image_url": post.image_url,
             "created_at": post.created_at,
             "like_count": post.like_count,
+            "is_remote": post.is_remote,
         }
-        for post, user in results
+        for post, u in all_results
     ]
 
 
@@ -175,7 +199,7 @@ def delete_post(
     db.add(activity)
     db.delete(post)
     db.commit()
-    deliver_activity(activity)
+    deliver_activity(activity, user=user)
     return {"status": "deleted"}
 
 
