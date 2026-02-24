@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
-from app.routers import auth, posts, users, federation, activitypub
+from app.routers import auth, posts, users, federation
 
 # Create Tables
 Base.metadata.create_all(bind=engine)
@@ -17,9 +17,6 @@ app.add_middleware(
 )
 
 # Include Routers
-# ActivityPub router MUST come before the generic users router so that
-# /.well-known/webfinger and /users/{username} (AP accept header) are handled first.
-app.include_router(activitypub.router, tags=["ActivityPub"])
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(posts.router, tags=["Posts"])
 app.include_router(users.router, tags=["Users"])
