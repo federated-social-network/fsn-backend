@@ -232,21 +232,68 @@ def accept_connection(
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
 
-    # Ensure the logged-in user is the target of this connection request
-    if connection.target_local_user_id != user.id:
-        raise HTTPException(status_code=403, detail="Not allowed")
-
-    # Mark original request as accepted
-    connection.status = "accepted"
-
-    # Create mirror connection (so both users see each other as connected)
-    mirror = Connection(
-        local_user_id=user.id,
-        target_local_user_id=connection.local_user_id,
-        status="accepted",
+    # Check authorization: user must be the target of this follow request
+    is_local_target = connection.target_local_user_id == user.id
+    is_remote_follow_target = (
+        connection.remote_actor_url is not None
+        and connection.local_user_id == user.id
     )
 
-    db.add(mirror)
+    if not is_local_target and not is_remote_follow_target:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    # Mark as accepted
+    connection.status = "accepted"
+
+    if is_local_target:
+        # Local-to-local: create mirror connection
+        mirror = Connection(
+            local_user_id=user.id,
+            target_local_user_id=connection.local_user_id,
+            status="accepted",
+        )
+        db.add(mirror)
+    elif is_remote_follow_target:
+        # Remote follow: send Accept activity back to the remote actor
+        import json
+        from app.services.crypto import sign_request
+
+        actor_url = f"{settings.BASE_URL}/users/{user.username}"
+        follow_activity = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Follow",
+            "actor": connection.remote_actor_url,
+            "object": actor_url,
+        }
+        accept_activity = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Accept",
+            "actor": actor_url,
+            "object": follow_activity,
+        }
+
+        remote_inbox = connection.remote_inbox_url
+        if remote_inbox and user.private_key:
+            try:
+                body = json.dumps(accept_activity).encode("utf-8")
+                key_id = f"{actor_url}#main-key"
+                import httpx
+                signed_headers = sign_request(
+                    private_key_pem=user.private_key,
+                    method="POST",
+                    url=remote_inbox,
+                    body=body,
+                    key_id=key_id,
+                )
+                httpx.post(
+                    remote_inbox,
+                    content=body,
+                    headers=signed_headers,
+                    timeout=10,
+                )
+            except Exception:
+                pass  # Best-effort delivery
+
     db.commit()
 
     return {"status": "connected"}
@@ -256,12 +303,22 @@ def accept_connection(
 def pending_connections(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    # Find connections where I am the target and status is pending
+    # Find pending connections where I am the target:
+    # 1. Local-to-local: target_local_user_id == my id
+    # 2. Remote-to-local: local_user_id == my id AND remote_actor_url is not null
     pending = (
         db.query(Connection)
         .filter(
-            Connection.target_local_user_id == user.id,
             Connection.status == "pending",
+            or_(
+                # Local follow requests targeting me
+                Connection.target_local_user_id == user.id,
+                # Remote follow requests targeting me
+                (
+                    (Connection.local_user_id == user.id)
+                    & (Connection.remote_actor_url.isnot(None))
+                ),
+            ),
         )
         .all()
     )
@@ -269,8 +326,28 @@ def pending_connections(
     results = []
 
     for conn in pending:
-        # For local connections, look up the requester
-        if conn.local_user_id:
+        if conn.remote_actor_url:
+            # Remote follow — extract a display name from the actor URL
+            remote_actor = conn.remote_actor_url
+            # Try to get a friendly display name like "user@domain"
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(remote_actor)
+                remote_username = remote_actor.rstrip("/").split("/")[-1]
+                display_name = f"{remote_username}@{parsed.hostname}"
+            except Exception:
+                display_name = remote_actor
+
+            results.append(
+                {
+                    "connection_id": conn.id,
+                    "from_user_id": None,
+                    "from_username": display_name,
+                    "is_remote": True,
+                }
+            )
+        elif conn.local_user_id:
+            # Local follow request
             requester = db.query(User).filter(User.id == conn.local_user_id).first()
             if requester:
                 results.append(
@@ -281,16 +358,6 @@ def pending_connections(
                         "is_remote": False,
                     }
                 )
-        # For remote connections (follow from remote instance)
-        elif conn.remote_actor_url:
-            results.append(
-                {
-                    "connection_id": conn.id,
-                    "from_user_id": None,
-                    "from_username": conn.remote_actor_url,
-                    "is_remote": True,
-                }
-            )
 
     return results
 

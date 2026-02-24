@@ -226,7 +226,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
             existing_conn = (
                 db.query(Connection)
                 .filter(
-                    Connection.target_local_user_id == target_user.id,
+                    Connection.local_user_id == target_user.id,
                     Connection.remote_actor_url == actor,
                 )
                 .first()
@@ -236,21 +236,31 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                 # Derive remote inbox URL from actor URL
                 remote_inbox_url = actor.rsplit("/", 2)[0] + "/inbox"
 
+                # Try to get actual inbox from actor object
+                try:
+                    resp = httpx.get(
+                        actor,
+                        headers={"Accept": "application/activity+json"},
+                        timeout=5,
+                    )
+                    if resp.status_code == 200:
+                        actor_data = resp.json()
+                        remote_inbox_url = actor_data.get("inbox", remote_inbox_url)
+                except Exception:
+                    pass
+
                 connection = Connection(
                     local_user_id=target_user.id,
                     target_local_user_id=None,
                     remote_actor_url=actor,
                     remote_inbox_url=remote_inbox_url,
-                    status="accepted",  # Auto-accept remote follows
+                    status="pending",  # Show in pending list, user must accept
                 )
                 db.add(connection)
 
-            # Send Accept back to the remote actor
-            _send_accept(
-                local_user=target_user,
-                follow_activity=activity,
-                remote_actor_url=actor,
-            )
+                # Store the original Follow activity JSON on the connection
+                # so we can wrap it in Accept later
+                connection._follow_activity = activity
 
     # Handle Accept (remote accepted our follow)
     if activity_type == "Accept":
