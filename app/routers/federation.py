@@ -189,6 +189,9 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                     image_url = att.get("url")
                     break
 
+        # Get a friendly author name (username@domain) instead of raw URL
+        author_display = _get_friendly_actor_name(actor)
+
         existing = db.query(Post).filter(Post.id == post_id).first()
         if not existing:
             post = Post(
@@ -196,7 +199,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                 content=content,
                 image_url=image_url,
                 user_id=None,
-                author=actor,
+                author=author_display,
                 origin_instance=actor.split("/users/")[0] if "/users/" in actor else actor,
                 is_remote=True,
             )
@@ -357,6 +360,42 @@ def _send_accept(local_user: User, follow_activity: dict, remote_actor_url: str)
 
 
 # ---------------------------------------------------------------------------
+# Helper: extract friendly display name from actor URL
+# ---------------------------------------------------------------------------
+def _get_friendly_actor_name(actor_url: str) -> str:
+    """
+    Given an actor URL like 'https://mastodon.social/users/alice',
+    return a friendly display name like 'alice@mastodon.social'.
+    Tries to fetch the actor profile first for the preferredUsername.
+    """
+    try:
+        parsed = urlparse(actor_url)
+        domain = parsed.hostname
+
+        # Try to fetch actor JSON for preferredUsername
+        resp = httpx.get(
+            actor_url,
+            headers={"Accept": "application/activity+json"},
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            actor_data = resp.json()
+            preferred = actor_data.get("preferredUsername")
+            if preferred:
+                return f"{preferred}@{domain}"
+    except Exception:
+        pass
+
+    # Fallback: extract from URL path
+    try:
+        parsed = urlparse(actor_url)
+        path_username = actor_url.rstrip("/").split("/")[-1]
+        return f"{path_username}@{parsed.hostname}"
+    except Exception:
+        return actor_url
+
+
+# ---------------------------------------------------------------------------
 # Existing endpoints (kept for backward compatibility)
 # ---------------------------------------------------------------------------
 @router.post("/inbox/delete")
@@ -370,8 +409,95 @@ def delete_remote_post(id: str, db: Session = Depends(get_db)):
     return {"status": "deleted"}
 
 
+# ---------------------------------------------------------------------------
+# Outbox endpoint (GET) — returns post count and posts for Mastodon
+# ---------------------------------------------------------------------------
+@router.get("/users/{username}/outbox")
+def get_outbox(username: str, page: bool = False, db: Session = Depends(get_db)):
+    """
+    ActivityPub Outbox endpoint (GET).
+    Returns an OrderedCollection with the user's post count.
+    Mastodon fetches this to display the post count on profiles.
+    """
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    actor_url = f"{settings.BASE_URL}/users/{username}"
+    outbox_url = f"{actor_url}/outbox"
+
+    # Count only local posts by this user
+    post_count = (
+        db.query(Post)
+        .filter(Post.user_id == user.id, Post.is_remote == False)
+        .count()
+    )
+
+    if not page:
+        return JSONResponse(
+            content={
+                "@context": "https://www.w3.org/ns/activitystreams",
+                "id": outbox_url,
+                "type": "OrderedCollection",
+                "totalItems": post_count,
+                "first": f"{outbox_url}?page=true",
+                "last": f"{outbox_url}?page=true",
+            },
+            media_type="application/activity+json",
+        )
+
+    # Return the first page with actual posts
+    from sqlalchemy import desc
+    posts = (
+        db.query(Post)
+        .filter(Post.user_id == user.id, Post.is_remote == False)
+        .order_by(desc(Post.created_at))
+        .limit(20)
+        .all()
+    )
+
+    items = []
+    for post in posts:
+        note = {
+            "type": "Note",
+            "id": f"{settings.BASE_URL}/posts/{post.id}",
+            "content": post.content,
+            "attributedTo": actor_url,
+            "published": post.created_at.isoformat() if post.created_at else None,
+            "to": ["https://www.w3.org/ns/activitystreams#Public"],
+        }
+        if post.image_url:
+            note["attachment"] = [{
+                "type": "Image",
+                "mediaType": "image/jpeg",
+                "url": post.image_url,
+            }]
+
+        items.append({
+            "type": "Create",
+            "actor": actor_url,
+            "published": post.created_at.isoformat() if post.created_at else None,
+            "object": note,
+        })
+
+    return JSONResponse(
+        content={
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "id": f"{outbox_url}?page=true",
+            "type": "OrderedCollectionPage",
+            "partOf": outbox_url,
+            "totalItems": post_count,
+            "orderedItems": items,
+        },
+        media_type="application/activity+json",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Outbox endpoint (POST) — store local activities
+# ---------------------------------------------------------------------------
 @router.post("/users/{username}/outbox")
-def outbox(
+def post_outbox(
     username: str,
     activity: dict,
     db: Session = Depends(get_db),
@@ -398,3 +524,4 @@ def outbox(
     db.refresh(new_activity)
 
     return {"status": "stored", "activity_id": new_activity.id}
+
