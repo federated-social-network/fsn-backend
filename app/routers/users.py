@@ -6,6 +6,7 @@ from app.models import User, Post, Connection
 from app.dependencies import get_current_user
 from app.config import settings
 from app.services.federation import build_follow_activity, deliver_raw_activity
+from app.routers.federation import _resolve_actor_display_name
 from app.services.supabase_client import supabase
 from PIL import Image
 from io import BytesIO
@@ -563,16 +564,8 @@ def pending_connections(
 
     for conn in pending:
         if conn.remote_actor_url:
-            # Remote follow — extract a display name from the actor URL
-            remote_actor = conn.remote_actor_url
-            # Try to get a friendly display name like "user@domain"
-            try:
-                from urllib.parse import urlparse
-                parsed = urlparse(remote_actor)
-                remote_username = remote_actor.rstrip("/").split("/")[-1]
-                display_name = f"{remote_username}@{parsed.hostname}"
-            except Exception:
-                display_name = remote_actor
+            # Remote follow — resolve friendly display name from actor profile
+            display_name = _resolve_actor_display_name(conn.remote_actor_url)
 
             results.append(
                 {
@@ -646,14 +639,8 @@ def list_connections(
                     }
                 )
         elif conn.remote_actor_url:
-            # Remote connection — extract friendly username@domain
-            try:
-                from urllib.parse import urlparse
-                parsed = urlparse(conn.remote_actor_url)
-                remote_username = conn.remote_actor_url.rstrip("/").split("/")[-1]
-                display_name = f"{remote_username}@{parsed.hostname}"
-            except Exception:
-                display_name = conn.remote_actor_url
+            # Remote connection — resolve friendly username@domain from actor profile
+            display_name = _resolve_actor_display_name(conn.remote_actor_url)
             results.append(
                 {
                     "user_id": None,
