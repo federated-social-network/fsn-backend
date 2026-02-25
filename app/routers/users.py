@@ -646,11 +646,18 @@ def list_connections(
                     }
                 )
         elif conn.remote_actor_url:
-            # Remote connection
+            # Remote connection — extract friendly username@domain
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(conn.remote_actor_url)
+                remote_username = conn.remote_actor_url.rstrip("/").split("/")[-1]
+                display_name = f"{remote_username}@{parsed.hostname}"
+            except Exception:
+                display_name = conn.remote_actor_url
             results.append(
                 {
                     "user_id": None,
-                    "username": conn.remote_actor_url,
+                    "username": display_name,
                     "is_remote": True,
                 }
             )
