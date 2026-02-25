@@ -1,7 +1,7 @@
 from sqlalchemy import and_, desc, or_
 from urllib.parse import urlparse
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Post, User, Activity, Connection, Like
@@ -21,7 +21,7 @@ router = APIRouter()
 
 @router.post("/posts")
 async def create_post(
-    content: str = Form(...),
+    content: str,
     image: UploadFile = File(None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
