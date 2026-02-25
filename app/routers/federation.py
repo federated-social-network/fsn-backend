@@ -342,6 +342,12 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                     .first()
                 )
                 if conn:
+                    # Delete remote posts from this actor
+                    actor_display = _resolve_actor_display_name(actor)
+                    db.query(Post).filter(
+                        Post.is_remote == True,
+                        Post.author == actor_display,
+                    ).delete(synchronize_session=False)
                     db.delete(conn)
 
     db.commit()

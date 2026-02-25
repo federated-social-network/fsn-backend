@@ -1,4 +1,5 @@
-from sqlalchemy import and_, desc, or_
+from sqlalchemy import and_, desc
+from urllib.parse import urlparse
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile
 from sqlalchemy.orm import Session
@@ -70,7 +71,7 @@ async def create_post(
     db.add(activity)
     db.commit()
 
-    deliver_activity(activity, user=user)
+    deliver_activity(activity, user=user, db=db)
     return post
 
 
@@ -122,21 +123,20 @@ def timeline_connected_users(
         .all()
     )
 
-    # Collect connected local user IDs and remote actor info
+    # Collect connected local user IDs and remote author names
     connected_local_user_ids = []
-    connected_remote_actors = []  # raw actor URLs
-    connected_remote_instances = []  # origin instance base URLs
+    connected_remote_authors = []  # friendly author names (username@domain)
 
     for c in connections:
         if c.target_local_user_id:
             connected_local_user_ids.append(c.target_local_user_id)
         elif c.remote_actor_url:
-            connected_remote_actors.append(c.remote_actor_url)
-            # Extract origin instance base URL
-            base = c.remote_actor_url.split("/users/")[0] if "/users/" in c.remote_actor_url else c.remote_actor_url
-            connected_remote_instances.append(base)
+            # Convert actor URL to friendly author name (e.g. alice@mastodon.social)
+            parsed = urlparse(c.remote_actor_url)
+            path_name = c.remote_actor_url.rstrip("/").split("/")[-1]
+            connected_remote_authors.append(f"{path_name}@{parsed.hostname}")
 
-    if not connected_local_user_ids and not connected_remote_actors:
+    if not connected_local_user_ids and not connected_remote_authors:
         return []
 
     # Get posts from connected local users
@@ -150,18 +150,14 @@ def timeline_connected_users(
             .all()
         )
 
-    # Get posts from connected remote actors
-    # Match by both raw actor URL and origin_instance (covers both old and new storage formats)
+    # Get posts from connected remote actors — match by friendly author name
     remote_results = []
-    if connected_remote_actors:
+    if connected_remote_authors:
         remote_posts = (
             db.query(Post)
             .filter(
                 Post.is_remote == True,
-                or_(
-                    Post.author.in_(connected_remote_actors),
-                    Post.origin_instance.in_(connected_remote_instances),
-                ),
+                Post.author.in_(connected_remote_authors),
             )
             .order_by(desc(Post.created_at))
             .all()
@@ -224,7 +220,7 @@ def delete_post(
     db.add(activity)
     db.delete(post)
     db.commit()
-    deliver_activity(activity, user=user)
+    deliver_activity(activity, user=user, db=db)
     return {"status": "deleted"}
 
 

@@ -679,6 +679,12 @@ def remove_connection(
         if not conn_to_remove:
             raise HTTPException(status_code=400, detail="Not connected to this user")
 
+        # Delete remote posts from this user
+        db.query(Post).filter(
+            Post.is_remote == True,
+            Post.author == username,
+        ).delete(synchronize_session=False)
+
         db.delete(conn_to_remove)
         db.commit()
         return {"status": "connection_removed"}
