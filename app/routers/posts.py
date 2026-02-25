@@ -1,4 +1,4 @@
-from sqlalchemy import and_, desc
+from sqlalchemy import and_, desc, or_
 from urllib.parse import urlparse
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile
@@ -123,14 +123,16 @@ def timeline_connected_users(
         .all()
     )
 
-    # Collect connected local user IDs and remote author names
+    # Collect connected local user IDs and remote author identifiers
     connected_local_user_ids = []
     connected_remote_authors = []  # friendly author names (username@domain)
+    connected_remote_actor_urls = []  # raw actor URLs (for backward compat)
 
     for c in connections:
         if c.target_local_user_id:
             connected_local_user_ids.append(c.target_local_user_id)
         elif c.remote_actor_url:
+            connected_remote_actor_urls.append(c.remote_actor_url)
             # Convert actor URL to friendly author name (e.g. alice@mastodon.social)
             parsed = urlparse(c.remote_actor_url)
             path_name = c.remote_actor_url.rstrip("/").split("/")[-1]
@@ -150,14 +152,18 @@ def timeline_connected_users(
             .all()
         )
 
-    # Get posts from connected remote actors — match by friendly author name
+    # Get posts from connected remote actors
+    # Match by friendly name (username@domain) OR raw actor URL (backward compat)
     remote_results = []
     if connected_remote_authors:
         remote_posts = (
             db.query(Post)
             .filter(
                 Post.is_remote == True,
-                Post.author.in_(connected_remote_authors),
+                or_(
+                    Post.author.in_(connected_remote_authors),
+                    Post.author.in_(connected_remote_actor_urls),
+                ),
             )
             .order_by(desc(Post.created_at))
             .all()
