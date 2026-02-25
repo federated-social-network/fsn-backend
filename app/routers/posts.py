@@ -123,22 +123,17 @@ def timeline_connected_users(
         .all()
     )
 
-    # Collect connected local user IDs and remote author identifiers
+    # Collect connected local user IDs and remote actor URLs
     connected_local_user_ids = []
-    connected_remote_authors = []  # friendly author names (username@domain)
-    connected_remote_actor_urls = []  # raw actor URLs (for backward compat)
+    connected_remote_actor_urls = []
 
     for c in connections:
         if c.target_local_user_id:
             connected_local_user_ids.append(c.target_local_user_id)
         elif c.remote_actor_url:
             connected_remote_actor_urls.append(c.remote_actor_url)
-            # Convert actor URL to friendly author name (e.g. alice@mastodon.social)
-            parsed = urlparse(c.remote_actor_url)
-            path_name = c.remote_actor_url.rstrip("/").split("/")[-1]
-            connected_remote_authors.append(f"{path_name}@{parsed.hostname}")
 
-    if not connected_local_user_ids and not connected_remote_authors:
+    if not connected_local_user_ids and not connected_remote_actor_urls:
         return []
 
     # Get posts from connected local users
@@ -153,17 +148,16 @@ def timeline_connected_users(
         )
 
     # Get posts from connected remote actors
-    # Match by friendly name (username@domain) OR raw actor URL (backward compat)
+    # Match by post ID prefix — ActivityPub post IDs start with the actor URL
+    # e.g. "https://mastodon.social/ap/users/12345/statuses/67890"
     remote_results = []
-    if connected_remote_authors:
+    if connected_remote_actor_urls:
+        actor_conditions = [Post.id.like(f"{url}%") for url in connected_remote_actor_urls]
         remote_posts = (
             db.query(Post)
             .filter(
                 Post.is_remote == True,
-                or_(
-                    Post.author.in_(connected_remote_authors),
-                    Post.author.in_(connected_remote_actor_urls),
-                ),
+                or_(*actor_conditions),
             )
             .order_by(desc(Post.created_at))
             .all()
@@ -188,6 +182,60 @@ def timeline_connected_users(
         for post, u in all_results
     ]
 
+
+@router.get("/debug/timeline_state")
+def debug_timeline_state(
+    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Debug endpoint to see exactly what's in the DB for the following timeline."""
+    connections = (
+        db.query(Connection)
+        .filter(Connection.local_user_id == user.id, Connection.status == "accepted")
+        .all()
+    )
+
+    remote_connections = []
+    derived_authors = []
+    derived_actor_urls = []
+
+    for c in connections:
+        if c.remote_actor_url:
+            parsed = urlparse(c.remote_actor_url)
+            path_name = c.remote_actor_url.rstrip("/").split("/")[-1]
+            friendly = f"{path_name}@{parsed.hostname}"
+            derived_authors.append(friendly)
+            derived_actor_urls.append(c.remote_actor_url)
+            remote_connections.append({
+                "connection_id": c.id,
+                "remote_actor_url": c.remote_actor_url,
+                "remote_inbox_url": c.remote_inbox_url,
+                "status": c.status,
+                "derived_friendly_name": friendly,
+            })
+
+    remote_posts = (
+        db.query(Post)
+        .filter(Post.is_remote == True)
+        .order_by(Post.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    return {
+        "accepted_remote_connections": remote_connections,
+        "derived_author_names": derived_authors,
+        "derived_actor_urls": derived_actor_urls,
+        "remote_posts_in_db": [
+            {
+                "id": p.id,
+                "author": p.author,
+                "origin_instance": p.origin_instance,
+                "content_preview": p.content[:50] if p.content else None,
+                "created_at": str(p.created_at),
+            }
+            for p in remote_posts
+        ],
+    }
 
 def _strip_html_for_display(content: str) -> str:
     """Strip any remaining HTML from post content for clean display."""
