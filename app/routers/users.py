@@ -652,10 +652,38 @@ def list_connections(
     return results
 
 
-@router.post("/remove_connection/{username}")
+@router.post("/remove_connection/{username:path}")
 def remove_connection(
     username: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
+    # Check if this is a remote user handle (contains @)
+    if "@" in username:
+        # Remote user — find the connection by matching remote_actor_url
+        remote_connections = (
+            db.query(Connection)
+            .filter(
+                Connection.local_user_id == user.id,
+                Connection.remote_actor_url.isnot(None),
+                Connection.status == "accepted",
+            )
+            .all()
+        )
+
+        conn_to_remove = None
+        for conn in remote_connections:
+            display_name = _resolve_actor_display_name(conn.remote_actor_url)
+            if display_name == username:
+                conn_to_remove = conn
+                break
+
+        if not conn_to_remove:
+            raise HTTPException(status_code=400, detail="Not connected to this user")
+
+        db.delete(conn_to_remove)
+        db.commit()
+        return {"status": "connection_removed"}
+
+    # Local user
     target_user = db.query(User).filter(User.username == username).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
