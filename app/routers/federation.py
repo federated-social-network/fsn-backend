@@ -1,5 +1,4 @@
 import json
-import logging
 import re
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
@@ -11,11 +10,6 @@ from app.dependencies import get_current_user
 from app.config import settings
 from app.services.crypto import sign_request, verify_http_signature
 from urllib.parse import urlparse
-
-logger = logging.getLogger(__name__)
-
-# ActivityPub object types we accept as posts
-_SUPPORTED_POST_TYPES = {"Note", "Image", "Video", "Article", "Page"}
 
 
 def _strip_html(html: str) -> str:
@@ -30,9 +24,8 @@ def _strip_html(html: str) -> str:
     return text
 
 
-def _resolve_actor_info(actor_url: str) -> tuple:
-    """Fetch actor profile and return (display_name, avatar_url)."""
-    avatar_url = None
+def _resolve_actor_display_name(actor_url: str) -> str:
+    """Fetch preferredUsername from actor profile and return username@domain."""
     try:
         parsed = urlparse(actor_url)
         domain = parsed.hostname
@@ -45,16 +38,8 @@ def _resolve_actor_info(actor_url: str) -> tuple:
         if resp.status_code == 200:
             actor_data = resp.json()
             preferred = actor_data.get("preferredUsername")
-
-            # Extract avatar from icon field
-            icon = actor_data.get("icon")
-            if isinstance(icon, dict):
-                avatar_url = icon.get("url")
-            elif isinstance(icon, list) and icon:
-                avatar_url = icon[0].get("url") if isinstance(icon[0], dict) else None
-
             if preferred:
-                return f"{preferred}@{domain}", avatar_url
+                return f"{preferred}@{domain}"
     except Exception:
         pass
 
@@ -62,15 +47,9 @@ def _resolve_actor_info(actor_url: str) -> tuple:
     try:
         parsed = urlparse(actor_url)
         path_username = actor_url.rstrip("/").split("/")[-1]
-        return f"{path_username}@{parsed.hostname}", avatar_url
+        return f"{path_username}@{parsed.hostname}"
     except Exception:
-        return actor_url, avatar_url
-
-
-def _resolve_actor_display_name(actor_url: str) -> str:
-    """Backward-compatible wrapper: returns only display name."""
-    name, _ = _resolve_actor_info(actor_url)
-    return name
+        return actor_url
 
 router = APIRouter()
 
@@ -195,10 +174,6 @@ async def user_inbox(
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    logger.info(
-        "User inbox (%s) received activity: type=%s, actor=%s",
-        username, activity.get("type"), activity.get("actor"),
-    )
     # Process the activity using shared logic
     return _process_inbox_activity(activity, db)
 
@@ -217,10 +192,6 @@ async def shared_inbox(request: Request, db: Session = Depends(get_db)):
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
-    logger.info(
-        "Shared inbox received activity: type=%s, actor=%s",
-        activity.get("type"), activity.get("actor"),
-    )
     return _process_inbox_activity(activity, db)
 
 
@@ -246,45 +217,21 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
     )
     db.add(new_activity)
 
-    # Handle Create (Note, Image, Video, Article, Page)
-    if activity_type == "Create" and isinstance(obj, dict) and obj.get("type") in _SUPPORTED_POST_TYPES:
+    # Handle Create (Note)
+    if activity_type == "Create" and isinstance(obj, dict) and obj.get("type") == "Note":
         post_id = obj.get("id")
-        obj_type = obj.get("type")
-        logger.info("Incoming Create activity: object type=%s, id=%s", obj_type, post_id)
-
-        # Extract text: Pixelfed uses "name" for captions on Image/Video,
-        # Mastodon uses "content" on Note.
         content = _strip_html(obj.get("content", ""))
-        if not content:
-            content = obj.get("name", "") or obj.get("summary", "") or ""
-
-        # Extract image URL
         image_url = obj.get("image_url")
 
-        # Check for image in attachment array (Mastodon / Pixelfed format)
+        # Check for image in attachment array (Mastodon format)
         if not image_url and obj.get("attachment"):
             for att in obj["attachment"]:
-                if isinstance(att, dict) and att.get("type") in ("Image", "Document"):
+                if att.get("type") in ("Image", "Document"):
                     image_url = att.get("url")
                     break
 
-        # Pixelfed Image/Video objects may have a direct "url" field
-        if not image_url and obj_type in ("Image", "Video"):
-            url_field = obj.get("url")
-            if isinstance(url_field, str):
-                image_url = url_field
-            elif isinstance(url_field, list):
-                # Pixelfed can send url as a list of Link objects
-                for link in url_field:
-                    if isinstance(link, dict) and link.get("type") == "Link":
-                        image_url = link.get("href")
-                        break
-                    elif isinstance(link, str):
-                        image_url = link
-                        break
-
-        # Resolve friendly author name and avatar from actor profile
-        author_display, author_avatar = _resolve_actor_info(actor)
+        # Resolve friendly author name (preferredUsername@domain)
+        author_display = _resolve_actor_display_name(actor)
 
         existing = db.query(Post).filter(Post.id == post_id).first()
         if not existing:
@@ -292,18 +239,12 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                 id=post_id,
                 content=content,
                 image_url=image_url,
-                author_avatar_url=author_avatar,
                 user_id=None,
                 author=author_display,
                 origin_instance=actor.split("/users/")[0] if "/users/" in actor else actor,
                 is_remote=True,
             )
             db.add(post)
-    elif activity_type == "Create" and isinstance(obj, dict):
-        logger.warning(
-            "Dropped Create activity with unsupported object type=%s from actor=%s",
-            obj.get("type"), actor,
-        )
 
     # Handle Delete
     if activity_type == "Delete":
@@ -435,7 +376,7 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
         if not outbox_url:
             return
 
-        # Build friendly author name and avatar from actor profile
+        # Build friendly author name from actor profile
         parsed = urlparse(actor_url)
         domain = parsed.hostname
         preferred = actor_data.get("preferredUsername", "")
@@ -444,14 +385,6 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
         else:
             path_name = actor_url.rstrip("/").split("/")[-1]
             author_display = f"{path_name}@{domain}"
-
-        # Extract avatar from actor icon field
-        author_avatar = None
-        icon = actor_data.get("icon")
-        if isinstance(icon, dict):
-            author_avatar = icon.get("url")
-        elif isinstance(icon, list) and icon:
-            author_avatar = icon[0].get("url") if isinstance(icon[0], dict) else None
 
         # Fetch outbox collection
         outbox_resp = httpx.get(
@@ -487,26 +420,21 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
 
                 item_type = activity_obj.get("type", "")
 
-                # Handle both wrapped (Create) and unwrapped activities
+                # Handle both wrapped (Create) and unwrapped (Note) activities
                 if item_type == "Create":
                     note = activity_obj.get("object", {})
-                elif item_type in _SUPPORTED_POST_TYPES:
+                elif item_type == "Note":
                     note = activity_obj
                 else:
                     continue
 
-                if not isinstance(note, dict) or note.get("type") not in _SUPPORTED_POST_TYPES:
+                if not isinstance(note, dict) or note.get("type") != "Note":
                     continue
 
-                note_type = note.get("type")
                 post_id = note.get("id")
-
-                # Extract text: "content" first, then "name" / "summary"
                 content = _strip_html(note.get("content", ""))
-                if not content:
-                    content = note.get("name", "") or note.get("summary", "") or ""
 
-                if not post_id:
+                if not post_id or not content:
                     continue
 
                 # Skip if already exists
@@ -517,29 +445,14 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
                 # Extract image from attachments
                 image_url = None
                 for att in note.get("attachment", []):
-                    if isinstance(att, dict) and att.get("type") in ("Image", "Document"):
+                    if att.get("type") in ("Image", "Document"):
                         image_url = att.get("url")
                         break
 
-                # Pixelfed Image/Video: direct "url" field
-                if not image_url and note_type in ("Image", "Video"):
-                    url_field = note.get("url")
-                    if isinstance(url_field, str):
-                        image_url = url_field
-                    elif isinstance(url_field, list):
-                        for link in url_field:
-                            if isinstance(link, dict) and link.get("type") == "Link":
-                                image_url = link.get("href")
-                                break
-                            elif isinstance(link, str):
-                                image_url = link
-                                break
-
                 post = Post(
                     id=post_id,
-                    content=content or "(image post)",
+                    content=content,
                     image_url=image_url,
-                    author_avatar_url=author_avatar,
                     user_id=None,
                     author=author_display,
                     origin_instance=actor_url.split("/users/")[0] if "/users/" in actor_url else actor_url,

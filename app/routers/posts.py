@@ -148,26 +148,16 @@ def timeline_connected_users(
         )
 
     # Get posts from connected remote actors
-    # Match by origin_instance (base URL derived from actor URL) — this works
-    # across all fediverse platforms (Mastodon, Pixelfed, etc.) regardless
-    # of their post ID format. Also fall back to post ID prefix match for
-    # backward compatibility.
+    # Match by post ID prefix — ActivityPub post IDs start with the actor URL
+    # e.g. "https://mastodon.social/ap/users/12345/statuses/67890"
     remote_results = []
     if connected_remote_actor_urls:
-        # Build origin_instance values from actor URLs
-        #   e.g. "https://pixelfed.social/users/alice" → "https://pixelfed.social"
-        origin_conditions = []
-        for url in connected_remote_actor_urls:
-            origin = url.split("/users/")[0] if "/users/" in url else url
-            origin_conditions.append(Post.origin_instance == origin)
-            # Also match by post ID prefix (Mastodon-style)
-            origin_conditions.append(Post.id.like(f"{url}%"))
-
+        actor_conditions = [Post.id.like(f"{url}%") for url in connected_remote_actor_urls]
         remote_posts = (
             db.query(Post)
             .filter(
                 Post.is_remote == True,
-                or_(*origin_conditions),
+                or_(*actor_conditions),
             )
             .order_by(desc(Post.created_at))
             .all()
@@ -183,7 +173,7 @@ def timeline_connected_users(
             "id": post.id,
             "content": _strip_html_for_display(post.content),
             "author": u.username if u else post.author,
-            "avatar_url": u.avatar_url if u else post.author_avatar_url,
+            "avatar_url": u.avatar_url if u else None,
             "image_url": post.image_url,
             "created_at": post.created_at,
             "like_count": post.like_count,
