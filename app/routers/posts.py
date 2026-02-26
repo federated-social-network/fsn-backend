@@ -23,7 +23,7 @@ client = Groq(api_key=settings.GROQ_API_KEY)
 
 @router.post("/posts")
 async def create_post(
-    content: str,
+    content: str = Form(...),
     image: UploadFile = File(None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
