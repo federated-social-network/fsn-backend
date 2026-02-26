@@ -326,44 +326,49 @@ def unlike_post(
     return {"message": "Unliked"}
 
 
+from fastapi import APIRouter, Form, HTTPException
+
+router = APIRouter()
+
 @router.post("/post/completePost")
 async def complete_post(content: str = Form(...)):
-    prompt = f"""
-            You are a professional writing enhancement engine.
 
-            Your task is to rewrite and expand the user's input while preserving its original meaning and intent.
+    # ---- validation ----
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="Content cannot be empty")
 
-            Rules:
-            - Do NOT reply to the user.
-            - Do NOT answer questions.
-            - Do NOT add new facts, opinions, or assumptions.
-            - Do NOT change the core message.
-            - Only enhance clarity, depth, flow, and engagement.
-            - Expand short inputs into a well-structured, richer version.
-            - Keep the tone neutral and suitable for a social platform.
-            - Return ONLY the improved version of the text.
-
-            Refer to the user content below : 
-            {content}
-            """
     try:
         response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",  # fast + good quality
+            model="openai/gpt-oss-120b",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful writing assistant. Improve clarity,engagement and also increase the content without changing meaning."
+                    "content": """
+                            You are a professional writing enhancement engine.
+
+                            Rewrite and expand the user's input while preserving its original meaning and intent.
+
+                            Rules:
+                            - Do NOT reply conversationally.
+                            - Do NOT answer questions.
+                            - Do NOT add new facts, opinions, or assumptions.
+                            - Do NOT change the core message.
+                            - Improve clarity, depth, flow, and engagement.
+                            - Expand short inputs into a richer, well-structured version.
+                            - Keep tone neutral and suitable for a social platform.
+                            - Return ONLY the improved text.
+                            """
                 },
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": content
                 }
             ],
-            temperature=0.7,
+            temperature=0.5,
             max_tokens=300
         )
 
-        improved_text = response.choices[0].message.content
+        improved_text = response.choices[0].message.content.strip()
 
         return {
             "original": content,
