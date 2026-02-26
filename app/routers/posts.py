@@ -23,7 +23,7 @@ client = Groq(api_key=settings.GROQ_API_KEY)
 
 @router.post("/posts")
 async def create_post(
-    content: str = Form(...),
+    content: str,
     image: UploadFile = File(None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -325,10 +325,6 @@ def unlike_post(
 
     return {"message": "Unliked"}
 
-
-from fastapi import APIRouter, Form, HTTPException
-
-router = APIRouter()
 
 @router.post("/post/completePost")
 async def complete_post(content: str = Form(...)):
