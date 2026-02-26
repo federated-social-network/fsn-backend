@@ -148,16 +148,26 @@ def timeline_connected_users(
         )
 
     # Get posts from connected remote actors
-    # Match by post ID prefix — ActivityPub post IDs start with the actor URL
-    # e.g. "https://mastodon.social/ap/users/12345/statuses/67890"
+    # Match by origin_instance (base URL derived from actor URL) — this works
+    # across all fediverse platforms (Mastodon, Pixelfed, etc.) regardless
+    # of their post ID format. Also fall back to post ID prefix match for
+    # backward compatibility.
     remote_results = []
     if connected_remote_actor_urls:
-        actor_conditions = [Post.id.like(f"{url}%") for url in connected_remote_actor_urls]
+        # Build origin_instance values from actor URLs
+        #   e.g. "https://pixelfed.social/users/alice" → "https://pixelfed.social"
+        origin_conditions = []
+        for url in connected_remote_actor_urls:
+            origin = url.split("/users/")[0] if "/users/" in url else url
+            origin_conditions.append(Post.origin_instance == origin)
+            # Also match by post ID prefix (Mastodon-style)
+            origin_conditions.append(Post.id.like(f"{url}%"))
+
         remote_posts = (
             db.query(Post)
             .filter(
                 Post.is_remote == True,
-                or_(*actor_conditions),
+                or_(*origin_conditions),
             )
             .order_by(desc(Post.created_at))
             .all()
