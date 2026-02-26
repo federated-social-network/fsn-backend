@@ -328,6 +328,24 @@ def unlike_post(
 
 @router.post("/post/completePost")
 async def complete_post(content: str = Form(...)):
+    prompt = f"""
+            You are a professional writing enhancement engine.
+
+            Your task is to rewrite and expand the user's input while preserving its original meaning and intent.
+
+            Rules:
+            - Do NOT reply to the user.
+            - Do NOT answer questions.
+            - Do NOT add new facts, opinions, or assumptions.
+            - Do NOT change the core message.
+            - Only enhance clarity, depth, flow, and engagement.
+            - Expand short inputs into a well-structured, richer version.
+            - Keep the tone neutral and suitable for a social platform.
+            - Return ONLY the improved version of the text.
+
+            Refer to the user content below : 
+            {content}
+            """
     try:
         response = client.chat.completions.create(
             model="openai/gpt-oss-120b",  # fast + good quality
@@ -338,7 +356,7 @@ async def complete_post(content: str = Form(...)):
                 },
                 {
                     "role": "user",
-                    "content": content
+                    "content": prompt
                 }
             ],
             temperature=0.7,
