@@ -377,7 +377,7 @@ async def complete_post(content: str = Form(...)):
 
 
 @router.post("/post/eloboratePost")
-async def complete_post(content: str = Form(...)):
+async def eloborate_post(content: str = Form(...)):
 
     # ---- validation ----
     if not content.strip():
