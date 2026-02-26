@@ -117,7 +117,7 @@ def timeline(db: Session = Depends(get_db), current_user:User=Depends(get_curren
         {
             "id": post.id,
             "content": post.content,
-            "created_at": post.created_at,
+            "created_at": post.created_at.isoformat(),
             "author": user.username,
             "image_url": post.image_url,
             "avatar_url": user.avatar_url,
