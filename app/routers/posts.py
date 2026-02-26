@@ -373,3 +373,52 @@ async def complete_post(content: str = Form(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.post("/post/eloboratePost")
+async def complete_post(content: str = Form(...)):
+
+    # ---- validation ----
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="Content cannot be empty")
+
+    try:
+        response = client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """
+                            You are a professional writing enhancement engine.
+
+                            Rewrite and expand the user's input for around 45 to 50 words while preserving its original meaning and intent.
+
+                            Rules:
+                            - Do NOT reply conversationally.
+                            - Do NOT answer questions.
+                            - Do NOT change the core message.
+                            - Improve clarity, depth, flow, and engagement.
+                            - Expand short inputs into a richer, well-structured version.
+                            - Keep tone neutral and suitable for a social platform.
+                            - Return ONLY the improved text.
+                            """
+                },
+                {
+                    "role": "user",
+                    "content": content
+                }
+            ],
+            temperature=0.5,
+            max_tokens=300
+        )
+
+        improved_text = response.choices[0].message.content.strip()
+
+        return {
+            "original": content,
+            "completed": improved_text
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
