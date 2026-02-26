@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     DELIVERY_ENABLED: bool = SEND_TO_OTHER_INSTANCE
     SUPABASE_SERVICE_KEY: str
     SUPABASE_URL: str
+    GROQ_API_KEY: str
 
     # Email settings
     EMAIL_PROVIDER: str = "gmail_oauth"  # "gmail_oauth", "smtp"

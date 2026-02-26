@@ -1,7 +1,7 @@
 from sqlalchemy import and_, desc, or_
 from urllib.parse import urlparse
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Post, User, Activity, Connection, Like
@@ -15,8 +15,10 @@ from app.services.federation import (
 from app.services.supabase_client import supabase
 from PIL import Image
 from io import BytesIO
+from groq import Groq
 
 router = APIRouter()
+client = Groq(api_key=settings.GROQ_API_KEY)
 
 
 @router.post("/posts")
@@ -322,3 +324,33 @@ def unlike_post(
     db.commit()
 
     return {"message": "Unliked"}
+
+
+@router.post("/post/completePost")
+async def complete_post(content: str = Form(...)):
+    try:
+        response = client.chat.completions.create(
+            model="openai/gpt-oss-120b",  # fast + good quality
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful writing assistant. Improve clarity,engagement and also increase the content without changing meaning."
+                },
+                {
+                    "role": "user",
+                    "content": content
+                }
+            ],
+            temperature=0.7,
+            max_tokens=300
+        )
+
+        improved_text = response.choices[0].message.content
+
+        return {
+            "original": content,
+            "completed": improved_text
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
