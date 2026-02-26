@@ -33,3 +33,4 @@ supabase
 alembic
 Pillow>=10.0.0
 python-multipart
+groq
