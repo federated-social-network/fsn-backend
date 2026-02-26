@@ -16,9 +16,18 @@ from app.services.supabase_client import supabase
 from PIL import Image
 from io import BytesIO
 from groq import Groq
+import redis
+import json
 
 router = APIRouter()
 client = Groq(api_key=settings.GROQ_API_KEY)
+
+
+redis_client = redis.Redis(
+    host="10.58.208.3",
+    port=6379,
+    decode_responses=True
+)
 
 
 @router.post("/posts")
@@ -85,6 +94,11 @@ def get_posts(db: Session = Depends(get_db)):
 @router.get("/timeline")
 def timeline(db: Session = Depends(get_db), current_user:User=Depends(get_current_user)):
     
+    cache_key = f"timeline:{current_user.id}"
+    cached = redis_client.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
     results = (
     db.query(Post, User, Like.post_id)
     .join(User, Post.user_id == User.id)
@@ -99,7 +113,7 @@ def timeline(db: Session = Depends(get_db), current_user:User=Depends(get_curren
     .all()
     )
 
-    return [
+    response =  [
         {
             "id": post.id,
             "content": post.content,
@@ -112,6 +126,13 @@ def timeline(db: Session = Depends(get_db), current_user:User=Depends(get_curren
         }
         for post, user, liked_post_id in results
     ]
+
+    redis_client.setex(
+        cache_key,
+        60,                     # seconds
+        json.dumps(response)
+    )
+    return response
 
 
 @router.get("/timeline_connected_users")
