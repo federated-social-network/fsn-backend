@@ -30,8 +30,9 @@ def _strip_html(html: str) -> str:
     return text
 
 
-def _resolve_actor_display_name(actor_url: str) -> str:
-    """Fetch preferredUsername from actor profile and return username@domain."""
+def _resolve_actor_info(actor_url: str) -> tuple:
+    """Fetch actor profile and return (display_name, avatar_url)."""
+    avatar_url = None
     try:
         parsed = urlparse(actor_url)
         domain = parsed.hostname
@@ -44,8 +45,16 @@ def _resolve_actor_display_name(actor_url: str) -> str:
         if resp.status_code == 200:
             actor_data = resp.json()
             preferred = actor_data.get("preferredUsername")
+
+            # Extract avatar from icon field
+            icon = actor_data.get("icon")
+            if isinstance(icon, dict):
+                avatar_url = icon.get("url")
+            elif isinstance(icon, list) and icon:
+                avatar_url = icon[0].get("url") if isinstance(icon[0], dict) else None
+
             if preferred:
-                return f"{preferred}@{domain}"
+                return f"{preferred}@{domain}", avatar_url
     except Exception:
         pass
 
@@ -53,9 +62,15 @@ def _resolve_actor_display_name(actor_url: str) -> str:
     try:
         parsed = urlparse(actor_url)
         path_username = actor_url.rstrip("/").split("/")[-1]
-        return f"{path_username}@{parsed.hostname}"
+        return f"{path_username}@{parsed.hostname}", avatar_url
     except Exception:
-        return actor_url
+        return actor_url, avatar_url
+
+
+def _resolve_actor_display_name(actor_url: str) -> str:
+    """Backward-compatible wrapper: returns only display name."""
+    name, _ = _resolve_actor_info(actor_url)
+    return name
 
 router = APIRouter()
 
@@ -268,8 +283,8 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                         image_url = link
                         break
 
-        # Resolve friendly author name (preferredUsername@domain)
-        author_display = _resolve_actor_display_name(actor)
+        # Resolve friendly author name and avatar from actor profile
+        author_display, author_avatar = _resolve_actor_info(actor)
 
         existing = db.query(Post).filter(Post.id == post_id).first()
         if not existing:
@@ -277,6 +292,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                 id=post_id,
                 content=content,
                 image_url=image_url,
+                author_avatar_url=author_avatar,
                 user_id=None,
                 author=author_display,
                 origin_instance=actor.split("/users/")[0] if "/users/" in actor else actor,
@@ -419,7 +435,7 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
         if not outbox_url:
             return
 
-        # Build friendly author name from actor profile
+        # Build friendly author name and avatar from actor profile
         parsed = urlparse(actor_url)
         domain = parsed.hostname
         preferred = actor_data.get("preferredUsername", "")
@@ -428,6 +444,14 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
         else:
             path_name = actor_url.rstrip("/").split("/")[-1]
             author_display = f"{path_name}@{domain}"
+
+        # Extract avatar from actor icon field
+        author_avatar = None
+        icon = actor_data.get("icon")
+        if isinstance(icon, dict):
+            author_avatar = icon.get("url")
+        elif isinstance(icon, list) and icon:
+            author_avatar = icon[0].get("url") if isinstance(icon[0], dict) else None
 
         # Fetch outbox collection
         outbox_resp = httpx.get(
@@ -515,6 +539,7 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
                     id=post_id,
                     content=content or "(image post)",
                     image_url=image_url,
+                    author_avatar_url=author_avatar,
                     user_id=None,
                     author=author_display,
                     origin_instance=actor_url.split("/users/")[0] if "/users/" in actor_url else actor_url,

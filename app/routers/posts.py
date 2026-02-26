@@ -183,7 +183,7 @@ def timeline_connected_users(
             "id": post.id,
             "content": _strip_html_for_display(post.content),
             "author": u.username if u else post.author,
-            "avatar_url": u.avatar_url if u else None,
+            "avatar_url": u.avatar_url if u else post.author_avatar_url,
             "image_url": post.image_url,
             "created_at": post.created_at,
             "like_count": post.like_count,
