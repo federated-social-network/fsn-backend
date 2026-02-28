@@ -14,7 +14,6 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_KEY: str
     SUPABASE_URL: str
     GROQ_API_KEY: str
-    GOOGLE_APPLICATION_CREDENTIALS: str
 
     # Email settings
     EMAIL_PROVIDER: str = "gmail_oauth"  # "gmail_oauth", "smtp"
