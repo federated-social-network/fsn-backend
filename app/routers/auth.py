@@ -1,4 +1,5 @@
 import uuid
+import re
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -35,6 +36,9 @@ class ResetPasswordRequest(BaseModel):
 
 @router.post("/register")
 def register(username: str, password: str, email: str, db: Session = Depends(get_db)):
+    username = username.strip()
+    if not re.match(r"^[a-zA-Z0-9_-]+$", username):
+        raise HTTPException(status_code=400, detail="Username can only contain alphanumeric characters, dashes (-), and underscores (_)")
     try:
         private_key, public_key = generate_rsa_keypair()
         user = User(
@@ -56,6 +60,7 @@ def register(username: str, password: str, email: str, db: Session = Depends(get
 
 @router.post("/login")
 def login(username: str, password: str, db: Session = Depends(get_db)):
+    username = username.strip()
     user = authenticate_user(username, password, db)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid Credentials")
