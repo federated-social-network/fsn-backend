@@ -56,6 +56,7 @@ class Post(Base):
     origin_instance = Column(String, nullable=False)
     is_remote = Column(Boolean, default=False)
     like_count = Column(Integer, default=0)
+    visibility = Column(String, nullable=False)
 
     created_at = Column(
         DateTime(timezone=True),

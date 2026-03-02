@@ -4,6 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from app.database import get_db
+from sqlalchemy import or_, and_, exists
 from app.models import Post, User, Activity, Connection, Like
 from app.dependencies import get_current_user
 from app.config import settings
@@ -32,6 +33,7 @@ redis_client = redis.Redis(
 
 @router.post("/posts")
 async def create_post(
+    visibility : str,
     content: str = Form(...),
     image: UploadFile = File(None),
     user: User = Depends(get_current_user),
@@ -66,6 +68,7 @@ async def create_post(
         author=user.username,
         origin_instance=settings.INSTANCE_NAME,
         is_remote=False,
+        visibility=visibility
     )
     db.add(post)
     db.commit()
@@ -91,29 +94,54 @@ def get_posts(db: Session = Depends(get_db)):
     return db.query(Post).order_by(Post.id.desc()).all()
 
 
+
 @router.get("/timeline")
-def timeline(db: Session = Depends(get_db), current_user:User=Depends(get_current_user)):
-    
+def timeline(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
     cache_key = f"timeline:{current_user.id}"
     cached = redis_client.get(cache_key)
     if cached:
         return json.loads(cached)
 
-    results = (
-    db.query(Post, User, Like.post_id)
-    .join(User, Post.user_id == User.id)
-    .outerjoin(
-        Like,
-        and_(
-            Like.post_id == Post.id,
-            Like.user_id == current_user.id,
-        ),
-    )
-    .order_by(Post.created_at.desc())
-    .all()
+    # Subquery: does current_user have accepted connection with post author?
+    connection_exists = (
+        db.query(Connection)
+        .filter(
+            Connection.local_user_id == current_user.id,
+            Connection.target_local_user_id == Post.user_id,
+            Connection.status == "accepted",
+        )
+        .exists()
     )
 
-    response =  [
+    results = (
+        db.query(Post, User, Like.post_id)
+        .join(User, Post.user_id == User.id)
+        .outerjoin(
+            Like,
+            and_(
+                Like.post_id == Post.id,
+                Like.user_id == current_user.id,
+            ),
+        )
+        .filter(
+            or_(
+                Post.visibility == "public",
+                and_(
+                    Post.visibility == "followers",
+                    connection_exists
+                ),
+                Post.user_id == current_user.id
+            )
+        )
+        .order_by(Post.created_at.desc())
+        .all()
+    )
+
+    response = [
         {
             "id": post.id,
             "content": post.content,
@@ -122,17 +150,13 @@ def timeline(db: Session = Depends(get_db), current_user:User=Depends(get_curren
             "image_url": post.image_url,
             "avatar_url": user.avatar_url,
             "like_count": post.like_count,
-            "is_liked":liked_post_id is not None,
-            "display_name":user.display_name
+            "is_liked": liked_post_id is not None,
+            "display_name": user.display_name,
         }
         for post, user, liked_post_id in results
     ]
 
-    redis_client.setex(
-        cache_key,
-        60,                     # seconds
-        json.dumps(response)
-    )
+    redis_client.setex(cache_key, 60, json.dumps(response))
     return response
 
 
