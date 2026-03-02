@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
 
     class Config:
-        env_file = ".env"
+        env_file = ".env",
+        extra="ignore"
 
 
 settings = Settings()
