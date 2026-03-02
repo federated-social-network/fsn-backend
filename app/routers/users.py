@@ -225,6 +225,8 @@ def get_user_profile(
             for post in posts
         ],
         "profile_url": db_user.avatar_url,
+        "bio":db_user.bio,
+        "display_name":db_user.display_name
     }
 
 
