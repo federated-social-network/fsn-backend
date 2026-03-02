@@ -775,11 +775,12 @@ async def upload_avatar(
 
 
 @router.post("/update-profile")
-def update_profile(
+async def update_profile(
     bio: str | None = None,
     display_name: str | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    image: UploadFile = File(None),
 ):
     db_user = db.query(User).filter(User.id == user.id).first()
 
@@ -794,6 +795,25 @@ def update_profile(
 
     if display_name is not None:
         db_user.display_name = display_name
+    
+    if image:
+        contents = await image.read()
+
+        # Validate actual image
+        try:
+            Image.open(BytesIO(contents)).verify()
+        except:
+            raise HTTPException(status_code=400, detail="Invalid image")
+
+        filename = f"{uuid.uuid4()}.jpg"
+
+        # Upload to Supabase
+        supabase.storage.from_("posts").upload(
+            filename, contents, {"content-type": image.content_type}
+        )
+
+        image_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/posts/{filename}" 
+        db_user.avatar_url = image_url
 
     db.commit()
     db.refresh(db_user)
