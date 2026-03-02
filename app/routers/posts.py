@@ -33,7 +33,7 @@ redis_client = redis.Redis(
 
 @router.post("/posts")
 async def create_post(
-    visibility : str,
+    visibility: str = "public",
     content: str = Form(...),
     image: UploadFile = File(None),
     user: User = Depends(get_current_user),
