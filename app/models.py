@@ -44,6 +44,8 @@ class User(Base):
     avatar_url = Column(String, nullable=True)
     public_key = Column(Text, nullable=True)
     private_key = Column(Text, nullable=True)
+    bio = Column(String,nullable=True)
+    display_name = Column(String, nullable=True)
 
     @staticmethod
     def hash_password(password: str) -> str:

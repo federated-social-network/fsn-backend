@@ -770,3 +770,36 @@ async def upload_avatar(
     db.commit()
 
     return {"avatar_url": public_url}
+
+
+@router.post("/update-profile")
+def update_profile(
+    bio: str | None = None,
+    display_name: str | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    db_user = db.query(User).filter(User.id == user.id).first()
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if bio is None and display_name is None:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+
+    if bio is not None:
+        db_user.bio = bio
+
+    if display_name is not None:
+        db_user.display_name = display_name
+
+    db.commit()
+    db.refresh(db_user)
+
+    return {
+        "message": "Profile updated successfully",
+        "id": db_user.id,
+        "username": db_user.username,
+        "display_name": db_user.display_name,
+        "bio": db_user.bio,
+    }
