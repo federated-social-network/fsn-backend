@@ -202,6 +202,7 @@ def timeline_connected_users(
             "created_at": post.created_at,
             "like_count": post.like_count,
             "is_remote": post.is_remote,
+            "display_name": u.display_name if u else None,
         }
         for post, u in all_results
     ]
