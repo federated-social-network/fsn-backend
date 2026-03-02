@@ -122,7 +122,8 @@ def timeline(db: Session = Depends(get_db), current_user:User=Depends(get_curren
             "image_url": post.image_url,
             "avatar_url": user.avatar_url,
             "like_count": post.like_count,
-            "is_liked":liked_post_id is not None
+            "is_liked":liked_post_id is not None,
+            "display_name":user.display_name
         }
         for post, user, liked_post_id in results
     ]
