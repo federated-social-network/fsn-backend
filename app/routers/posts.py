@@ -85,7 +85,7 @@ async def create_post(
     db.add(activity)
     db.commit()
 
-    deliver_activity(activity, user=user, db=db)
+    deliver_activity(activity_payload, user=user, db=db)
     return post
 
 
@@ -323,7 +323,7 @@ def delete_post(
     db.add(activity)
     db.delete(post)
     db.commit()
-    deliver_activity(activity, user=user, db=db)
+    deliver_activity(activity_payload, user=user, db=db)
     return {"status": "deleted"}
 
 

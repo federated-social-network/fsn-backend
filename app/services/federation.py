@@ -67,30 +67,16 @@ def build_accept_activity(actor_url: str, follow_activity: dict):
     }
 
 
-def deliver_activity(activity, user=None, db=None):
+def deliver_activity(activity_json: dict, user=None, db=None):
     """
-    Deliver an activity to all remote followers' inboxes.
+    Deliver a pre-built ActivityPub activity JSON to all remote followers' inboxes.
     Looks up followers from the Connection table.
     """
     if not settings.DELIVERY_ENABLED:
+        print("[Federation] Delivery disabled (DELIVERY_ENABLED=false)")
         return
 
-    payload = {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "id": f"{settings.BASE_URL}/activities/{uuid.uuid4()}",
-        "type": activity.type,
-        "actor": activity.actor,
-        "object": activity.object,
-    }
-
-    # Add addressing if it's a Create activity
-    if activity.type == "Create":
-        actor_url = activity.actor
-        followers_url = f"{actor_url}/followers"
-        payload["to"] = ["https://www.w3.org/ns/activitystreams#Public"]
-        payload["cc"] = [followers_url]
-
-    body = json.dumps(payload).encode("utf-8")
+    body = json.dumps(activity_json).encode("utf-8")
 
     # Collect all remote follower inboxes
     inbox_urls = set()
@@ -110,10 +96,18 @@ def deliver_activity(activity, user=None, db=None):
         for conn in follower_connections:
             if conn.remote_inbox_url:
                 inbox_urls.add(conn.remote_inbox_url)
+                print(f"[Federation] Found follower inbox: {conn.remote_inbox_url} (actor: {conn.remote_actor_url})")
 
     # Fallback: use REMOTE_INBOX_URL if configured and no follower inboxes found
     if not inbox_urls and settings.REMOTE_INBOX_URL:
         inbox_urls.add(settings.REMOTE_INBOX_URL)
+        print(f"[Federation] No follower inboxes found, using fallback REMOTE_INBOX_URL: {settings.REMOTE_INBOX_URL}")
+
+    if not inbox_urls:
+        print("[Federation] No inboxes to deliver to — no remote followers and no REMOTE_INBOX_URL configured")
+        return
+
+    print(f"[Federation] Delivering activity type={activity_json.get('type')} to {len(inbox_urls)} inbox(es)")
 
     # Deliver to each inbox
     for inbox_url in inbox_urls:
@@ -129,6 +123,9 @@ def deliver_activity(activity, user=None, db=None):
                     body=body,
                     key_id=key_id,
                 )
+                print(f"[Federation] Signed request with key_id={key_id}")
+            else:
+                print(f"[Federation] WARNING: No private key for user, sending unsigned request")
 
             resp = httpx.post(
                 inbox_url,
@@ -136,10 +133,11 @@ def deliver_activity(activity, user=None, db=None):
                 headers=headers,
                 timeout=10,
             )
-            if resp.status_code in (200, 202):
-                activity.is_delivered = True
-        except Exception:
-            pass
+            print(f"[Federation] Delivered to {inbox_url} — status={resp.status_code}")
+            if resp.status_code not in (200, 202):
+                print(f"[Federation] Non-success response body: {resp.text[:500]}")
+        except Exception as e:
+            print(f"[Federation] ERROR delivering to {inbox_url}: {e}")
 
 
 def deliver_raw_activity(activity_json: dict, user=None):
