@@ -1,6 +1,6 @@
 def test_forgot_password_valid_mail(client):
     response = client.post(
-        "/auth/forgot-password", json={"email": "example12@gmail.com"}
+        "/auth/forgot-password", json={"email": "test@test.com"}
     )
     print(response.json())
     assert response.status_code == 200

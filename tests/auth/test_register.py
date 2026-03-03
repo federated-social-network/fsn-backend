@@ -15,7 +15,7 @@ def test_register_duplicate_username(client):
     response = client.post(
         "/auth/register",
         params={
-            "username": "newuser13",
+            "username": "Anuj",
             "email": "example123@gmail.com",
             "password": "newpassword1",
         },

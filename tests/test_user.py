@@ -4,5 +4,5 @@ def test_get_current_user(client):
     assert response.status_code == 200
     data = response.json()
 
-    assert data["username"] == "testuser"
+    assert data["username"] == "testuser7"
     assert data["email"] == "test@test.com"
