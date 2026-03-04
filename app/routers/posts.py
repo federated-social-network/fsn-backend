@@ -397,7 +397,7 @@ def like_post(
     post.like_count += 1
 
     db.commit()
-
+    redis_client.delete(f"timeline:{user.id}")
     return {"message": "Liked"}
 
 
@@ -418,6 +418,7 @@ def unlike_post(
     post.like_count = max(0, post.like_count - 1)
 
     db.commit()
+    redis_client.delete(f"timeline:{user.id}")
 
     return {"message": "Unliked"}
 
