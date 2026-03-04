@@ -57,7 +57,7 @@ class Post(Base):
     is_remote = Column(Boolean, default=False)
     like_count = Column(Integer, default=0)
     visibility = Column(String, nullable=False, default="public")
-
+    comment_count = Column(Integer, default=0)
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -139,4 +139,29 @@ class Like(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "post_id", name="unique_user_post_like"),
+    )
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    content = Column(Text, nullable=False)
+
+    user_id = Column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    post_id = Column(
+        String,
+        ForeignKey("posts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "post_id", "content", name="unique_comment"),
     )

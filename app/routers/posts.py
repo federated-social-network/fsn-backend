@@ -1,11 +1,11 @@
 from sqlalchemy import and_, desc, or_
 from urllib.parse import urlparse
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
 from sqlalchemy import or_, and_, exists
-from app.models import Post, User, Activity, Connection, Like
+from app.models import Post, User, Activity, Connection, Like, Comment
 from app.dependencies import get_current_user
 from app.config import settings
 from app.services.federation import (
@@ -169,7 +169,8 @@ def timeline(
             "display_name": user.display_name,
             "like_count": post.like_count,
             "is_liked": liked_post_id is not None,
-            "liked_by": like_map.get(post.id, [])
+            "liked_by": like_map.get(post.id, []),
+            "comment_count":post.comment_count
         }
         for post, user, liked_post_id in results
     ]
@@ -276,7 +277,9 @@ def timeline_connected_users(
             "is_remote": post.is_remote,
             "display_name": u.display_name if u else None,
             "liked_by": like_map.get(post.id, []),
-            "is_liked": post.id in liked_set
+            "is_liked": post.id in liked_set,
+            "comment_count":post.comment_count
+            
         }
         for post, u in all_results
     ]
@@ -546,3 +549,94 @@ async def redis_health():
             "status": "error",
             "error": str(e),
         }
+    
+@router.post("/{post_id}/comments")
+async def create_comment(
+    post_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+
+    body = await request.json()
+    content = body.get("content")
+
+    if not content:
+        raise HTTPException(status_code=400, detail="Content required")
+
+    post = db.query(Post).filter(Post.id == post_id).first()
+
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    comment = Comment(
+        id=str(uuid.uuid4()),
+        content=content,
+        user_id=current_user.id,
+        post_id=post_id,
+    )
+
+    db.add(comment)
+
+    post.comment_count += 1
+
+    db.commit()
+
+    return {
+        "id": comment.id,
+        "content": comment.content,
+        "user_id": comment.user_id,
+        "post_id": comment.post_id,
+        "created_at": comment.created_at,
+    }
+
+@router.get("/{post_id}/comments")
+def get_comments(post_id: str, db: Session = Depends(get_db)):
+
+    comments = (
+        db.query(Comment, User)
+        .join(User, Comment.user_id == User.id)
+        .filter(Comment.post_id == post_id)
+        .order_by(Comment.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": comment.id,
+            "content": comment.content,
+            "user_id": comment.user_id,
+            "post_id": comment.post_id,
+            "display_name": user.display_name,
+            "created_at": comment.created_at,
+        }
+        for comment, user in comments
+    ]
+
+
+@router.delete("/comments/{comment_id}")
+def delete_comment(
+    comment_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+
+    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    # allow only the comment author
+    if comment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this comment")
+
+    post = db.query(Post).filter(Post.id == comment.post_id).first()
+
+    db.delete(comment)
+
+    if post and post.comment_count > 0:
+        post.comment_count -= 1
+
+    db.commit()
+
+    return {"message": "Comment deleted"}
