@@ -106,7 +106,6 @@ def timeline(
     if cached:
         return json.loads(cached)
 
-    # Subquery: does current_user have accepted connection with post author?
     connection_exists = (
         db.query(Connection)
         .filter(
@@ -130,10 +129,7 @@ def timeline(
         .filter(
             or_(
                 Post.visibility == "public",
-                and_(
-                    Post.visibility == "followers",
-                    connection_exists
-                ),
+                and_(Post.visibility == "followers", connection_exists),
                 Post.user_id == current_user.id
             )
         )
@@ -141,20 +137,36 @@ def timeline(
         .all()
     )
 
-    response = [
-        {
+    response = []
+
+    for post, user, liked_post_id in results:
+
+        # fetch up to 3 users who liked the post AND have avatar
+        liked_users = (
+            db.query(User.avatar_url)
+            .join(Like, Like.user_id == User.id)
+            .filter(
+                Like.post_id == post.id,
+                User.avatar_url.isnot(None)
+            )
+            .limit(3)
+            .all()
+        )
+
+        liked_avatars = [u.avatar_url for u in liked_users]
+
+        response.append({
             "id": post.id,
             "content": post.content,
             "created_at": post.created_at.isoformat(),
             "author": user.username,
             "image_url": post.image_url,
             "avatar_url": user.avatar_url,
+            "display_name": user.display_name,
             "like_count": post.like_count,
             "is_liked": liked_post_id is not None,
-            "display_name": user.display_name,
-        }
-        for post, user, liked_post_id in results
-    ]
+            "liked_by": liked_avatars   # <-- new field
+        })
 
     redis_client.setex(cache_key, 60, json.dumps(response))
     return response
