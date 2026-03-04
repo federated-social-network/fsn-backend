@@ -137,25 +137,29 @@ def timeline(
         .all()
     )
 
-    response = []
+    posts = [post.id for post, _, _ in results]
 
-    for post, user, liked_post_id in results:
-
-        # fetch up to 3 users who liked the post AND have avatar
-        liked_users = (
-            db.query(User.avatar_url)
-            .join(Like, Like.user_id == User.id)
-            .filter(
-                Like.post_id == post.id,
-                User.avatar_url.isnot(None)
-            )
-            .limit(3)
-            .all()
+    # ONE query to fetch likes
+    like_rows = (
+        db.query(Like.post_id, User.avatar_url)
+        .join(User, Like.user_id == User.id)
+        .filter(
+            Like.post_id.in_(posts),
+            User.avatar_url.isnot(None)
         )
+        .all()
+    )
 
-        liked_avatars = [u.avatar_url for u in liked_users]
+    # group avatars per post
+    like_map = {}
+    for post_id, avatar in like_rows:
+        if post_id not in like_map:
+            like_map[post_id] = []
+        if len(like_map[post_id]) < 3:
+            like_map[post_id].append(avatar)
 
-        response.append({
+    response = [
+        {
             "id": post.id,
             "content": post.content,
             "created_at": post.created_at.isoformat(),
@@ -165,8 +169,10 @@ def timeline(
             "display_name": user.display_name,
             "like_count": post.like_count,
             "is_liked": liked_post_id is not None,
-            "liked_by": liked_avatars   # <-- new field
-        })
+            "liked_by": like_map.get(post.id, [])
+        }
+        for post, user, liked_post_id in results
+    ]
 
     redis_client.setex(cache_key, 60, json.dumps(response))
     return response
@@ -176,14 +182,13 @@ def timeline(
 def timeline_connected_users(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    # Get accepted connections where I am the local_user_id
+
     connections = (
         db.query(Connection)
         .filter(Connection.local_user_id == user.id, Connection.status == "accepted")
         .all()
     )
 
-    # Collect connected local user IDs and remote actor URLs
     connected_local_user_ids = []
     connected_remote_actor_urls = []
 
@@ -196,7 +201,6 @@ def timeline_connected_users(
     if not connected_local_user_ids and not connected_remote_actor_urls:
         return []
 
-    # Get posts from connected local users
     local_results = []
     if connected_local_user_ids:
         local_results = (
@@ -207,12 +211,10 @@ def timeline_connected_users(
             .all()
         )
 
-    # Get posts from connected remote actors
-    # Match by post ID prefix — ActivityPub post IDs start with the actor URL
-    # e.g. "https://mastodon.social/ap/users/12345/statuses/67890"
     remote_results = []
     if connected_remote_actor_urls:
         actor_conditions = [Post.id.like(f"{url}%") for url in connected_remote_actor_urls]
+
         remote_posts = (
             db.query(Post)
             .filter(
@@ -222,11 +224,34 @@ def timeline_connected_users(
             .order_by(desc(Post.created_at))
             .all()
         )
+
         remote_results = [(post, None) for post in remote_posts]
 
-    # Combine and sort by created_at
     all_results = local_results + remote_results
     all_results.sort(key=lambda x: x[0].created_at, reverse=True)
+
+    post_ids = [post.id for post, _ in all_results]
+
+    # single query for likes
+    like_rows = []
+    if post_ids:
+        like_rows = (
+            db.query(Like.post_id, User.avatar_url)
+            .join(User, Like.user_id == User.id)
+            .filter(
+                Like.post_id.in_(post_ids),
+                User.avatar_url.isnot(None)
+            )
+            .all()
+        )
+
+    like_map = {}
+
+    for post_id, avatar in like_rows:
+        if post_id not in like_map:
+            like_map[post_id] = []
+        if len(like_map[post_id]) < 3:
+            like_map[post_id].append(avatar)
 
     return [
         {
@@ -239,10 +264,10 @@ def timeline_connected_users(
             "like_count": post.like_count,
             "is_remote": post.is_remote,
             "display_name": u.display_name if u else None,
+            "liked_by": like_map.get(post.id, [])
         }
         for post, u in all_results
     ]
-
 
 @router.get("/debug/timeline_state")
 def debug_timeline_state(
