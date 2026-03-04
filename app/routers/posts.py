@@ -610,6 +610,7 @@ def get_comments(post_id: str, db: Session = Depends(get_db)):
             "avatar_url":user.avatar_url,
             "display_name": user.display_name,
             "created_at": comment.created_at,
+            "username":user.username
         }
         for comment, user in comments
     ]
