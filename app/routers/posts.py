@@ -201,6 +201,7 @@ def timeline_connected_users(
     if not connected_local_user_ids and not connected_remote_actor_urls:
         return []
 
+    # LOCAL POSTS
     local_results = []
     if connected_local_user_ids:
         local_results = (
@@ -211,6 +212,7 @@ def timeline_connected_users(
             .all()
         )
 
+    # REMOTE POSTS
     remote_results = []
     if connected_remote_actor_urls:
         actor_conditions = [Post.id.like(f"{url}%") for url in connected_remote_actor_urls]
@@ -232,26 +234,35 @@ def timeline_connected_users(
 
     post_ids = [post.id for post, _ in all_results]
 
-    # single query for likes
-    like_rows = []
-    if post_ids:
-        like_rows = (
-            db.query(Like.post_id, User.avatar_url)
-            .join(User, Like.user_id == User.id)
-            .filter(
-                Like.post_id.in_(post_ids),
-                User.avatar_url.isnot(None)
-            )
-            .all()
+    # avatars of people who liked
+    like_rows = (
+        db.query(Like.post_id, User.avatar_url)
+        .join(User, Like.user_id == User.id)
+        .filter(
+            Like.post_id.in_(post_ids),
+            User.avatar_url.isnot(None)
         )
+        .all()
+    )
 
     like_map = {}
-
     for post_id, avatar in like_rows:
         if post_id not in like_map:
             like_map[post_id] = []
         if len(like_map[post_id]) < 3:
             like_map[post_id].append(avatar)
+
+    # check if current user liked
+    liked_posts = (
+        db.query(Like.post_id)
+        .filter(
+            Like.post_id.in_(post_ids),
+            Like.user_id == user.id
+        )
+        .all()
+    )
+
+    liked_set = {p[0] for p in liked_posts}
 
     return [
         {
@@ -264,7 +275,8 @@ def timeline_connected_users(
             "like_count": post.like_count,
             "is_remote": post.is_remote,
             "display_name": u.display_name if u else None,
-            "liked_by": like_map.get(post.id, [])
+            "liked_by": like_map.get(post.id, []),
+            "is_liked": post.id in liked_set
         }
         for post, u in all_results
     ]
