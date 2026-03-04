@@ -1,5 +1,6 @@
 import uuid
 import re
+from jose import jwt
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -12,6 +13,7 @@ from app.auth import (
     initiate_password_reset,
     verify_otp,
     reset_password,
+    create_refresh_token
 )
 from app.config import settings
 from app.services.crypto import generate_rsa_keypair
@@ -64,15 +66,14 @@ def login(username: str, password: str, db: Session = Depends(get_db)):
     user = authenticate_user(username, password, db)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid Credentials")
+    
+    payload = { "user_id": user.id,
+                "username": user.username,
+                "instance": settings.INSTANCE_NAME}
+    access_token = create_access_token(payload)
+    refresh_token = create_refresh_token(payload)
 
-    token = create_access_token(
-        {
-            "user_id": user.id,
-            "username": user.username,
-            "instance": settings.INSTANCE_NAME,
-        }
-    )
-    return {"access_token": token}
+    return {"access_token": access_token,"refresh_token":refresh_token}
 
 
 @router.post("/forgot-password")
@@ -112,3 +113,28 @@ def reset_user_password(request: ResetPasswordRequest, db: Session = Depends(get
         raise HTTPException(status_code=400, detail=message)
 
     return {"message": message}
+
+
+@router.post("/refresh")
+def refresh_token(refresh_token: str):
+
+    try:
+        payload = jwt.decode(
+            refresh_token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+
+        new_access_token = create_access_token({
+            "user_id": payload["user_id"],
+            "username": payload["username"],
+            "instance": payload["instance"]
+        })
+
+        return {"access_token": new_access_token}
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
