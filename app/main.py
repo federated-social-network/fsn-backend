@@ -9,7 +9,10 @@ app = FastAPI(title="Federated Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://heliix.live",
+        "https://heliix.pages.dev"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
