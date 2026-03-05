@@ -14,6 +14,7 @@ from app.database import Base
 from passlib.context import CryptContext
 from datetime import datetime
 import uuid
+from sqlalchemy import Index
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
@@ -164,4 +165,23 @@ class Comment(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "post_id", "content", name="unique_comment"),
+    )
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    sender_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    receiver_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    content = Column(Text, nullable=False)
+
+    is_read = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_chat_pair", "sender_id", "receiver_id"),
     )
