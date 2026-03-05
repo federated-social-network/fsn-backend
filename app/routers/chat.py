@@ -83,6 +83,7 @@ def get_conversations(
     results = (
         db.query(
             subq.c.other_user,
+            User.username,
             User.avatar_url,
             Message.content,
             Message.created_at
