@@ -1,9 +1,10 @@
 from fastapi import APIRouter, WebSocket, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, case, func
 from app.database import get_db
-from app.models import Message
+from app.models import Message, User
 from app.services.connection_manager import manager
+from app.dependencies import get_current_user
 
 router = APIRouter()
 
@@ -51,3 +52,48 @@ def get_messages(user1: str, user2: str, db: Session = Depends(get_db)):
     ).order_by(Message.created_at).all()
 
     return messages
+
+
+@router.get("/conversations")
+def get_conversations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    user_id = current_user.id
+
+    subq = (
+        db.query(
+            case(
+                (Message.sender_id == user_id, Message.receiver_id),
+                else_=Message.sender_id
+            ).label("other_user"),
+            func.max(Message.created_at).label("latest_time")
+        )
+        .filter(
+            or_(
+                Message.sender_id == user_id,
+                Message.receiver_id == user_id
+            )
+        )
+        .group_by("other_user")
+        .subquery()
+    )
+
+    results = (
+        db.query(
+            subq.c.other_user,
+            User.avatar_url,
+            Message.content,
+            Message.created_at
+        )
+        .join(User, User.id == subq.c.other_user)
+        .join(
+            Message,
+            (Message.created_at == subq.c.latest_time)
+        )
+        .order_by(Message.created_at.desc())
+        .all()
+    )
+
+    return results
