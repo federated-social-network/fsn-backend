@@ -33,12 +33,17 @@ redis_client = redis.Redis(
 
 @router.post("/posts")
 async def create_post(
-    visibility: str = "public",
-    content: str = Form(...),
+    visibility: str = "public", 
+    content: str | None = Form(None),
     image: UploadFile = File(None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if content is None:
+        content = ""
+        
+    if not content.strip() and not image:
+        raise HTTPException(status_code=400, detail="Post must contain text or an image")
 
     image_url = None
 
