@@ -654,6 +654,7 @@ def list_connections(
                         "user_id": target.id,
                         "username": target.username,
                         "is_remote": False,
+                        "avatar_url": target.avatar_url,
                     }
                 )
         elif conn.remote_actor_url:
