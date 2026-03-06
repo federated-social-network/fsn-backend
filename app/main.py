@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
-from app.routers import auth, posts, users, federation, moderation, chat
+from app.routers import auth, posts, users, federation, moderation, chat, notifications
 
 # Create Tables
 
@@ -26,6 +26,7 @@ app.include_router(users.router, tags=["Users"])
 app.include_router(federation.router, tags=["Federation"])
 app.include_router(moderation.router, tags=["Moderation"])
 app.include_router(chat.router, tags=["Chat"])
+app.include_router(notifications.router, tags=["Notification"])
 
 
 @app.get("/")
