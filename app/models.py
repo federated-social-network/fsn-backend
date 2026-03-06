@@ -185,3 +185,35 @@ class Message(Base):
     __table_args__ = (
         Index("idx_chat_pair", "sender_id", "receiver_id"),
     )
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    recipient_id = Column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    actor_id = Column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    type = Column(String, nullable=False)  
+    # examples: follow_request, follow_accept, message
+
+    object_id = Column(String, nullable=True)
+    # optional reference (request id, message id, etc.)
+
+    is_read = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_notification_recipient", "recipient_id"),
+    )
