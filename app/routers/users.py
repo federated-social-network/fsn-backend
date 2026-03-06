@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, or_
 from app.database import get_db
-from app.models import User, Post, Connection
+from app.models import Notification, User, Post, Connection
 from app.dependencies import get_current_user
 from app.config import settings
 from app.services.federation import build_follow_activity, deliver_raw_activity
@@ -301,6 +301,14 @@ def connect_user(
         target_local_user_id=target.id,
         status="pending",
     )
+    notification = Notification(
+        recipient_id=target.id,
+        actor_id=user.id,
+        type="follow_request",
+        object_id=connection.id,
+    )
+
+    db.add(notification)
 
     db.add(connection)
     db.commit()
@@ -532,7 +540,15 @@ def accept_connection(
                 )
             except Exception:
                 pass  # Best-effort delivery
+    
+    notification = Notification(
+        recipient_id=connection.local_user_id,
+        actor_id=user.id,
+        type="follow_accept",
+        object_id=connection.id
+    )
 
+    db.add(notification)
     db.commit()
 
     return {"status": "connected"}
