@@ -1,7 +1,7 @@
 from fastapi import APIRouter, WebSocket, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, case, func
-from app.database import get_db
+from app.database import get_db, SessionLocal
 from app.models import Message, User
 from app.services.connection_manager import manager
 from app.dependencies import get_current_user
@@ -9,7 +9,7 @@ from app.dependencies import get_current_user
 router = APIRouter()
 
 @router.websocket("/ws/chat/{user_id}")
-async def chat_socket(websocket: WebSocket, user_id: str, db: Session = Depends(get_db)):
+async def chat_socket(websocket: WebSocket, user_id: str):
 
     await manager.connect(user_id, websocket)
 
@@ -20,15 +20,17 @@ async def chat_socket(websocket: WebSocket, user_id: str, db: Session = Depends(
             receiver_id = data["receiver_id"]
             content = data["content"]
 
-            msg = Message(
-                sender_id=user_id,
-                receiver_id=receiver_id,
-                content=content
-            )
+            # Save to database using a fresh session
+            with SessionLocal() as db:
+                msg = Message(
+                    sender_id=user_id,
+                    receiver_id=receiver_id,
+                    content=content
+                )
+                db.add(msg)
+                db.commit()
 
-            db.add(msg)
-            db.commit()
-
+            # Broadcast real-time message
             await manager.send_personal_message(
                 receiver_id,
                 {
@@ -37,7 +39,8 @@ async def chat_socket(websocket: WebSocket, user_id: str, db: Session = Depends(
                 }
             )
 
-    except:
+    except Exception as e:
+        print(f"WebSocket closed or error for user {user_id}: {e}")
         manager.disconnect(user_id)
 
 
