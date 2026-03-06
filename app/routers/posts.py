@@ -19,6 +19,7 @@ from io import BytesIO
 from groq import Groq
 import redis
 import json
+import re
 
 router = APIRouter()
 client = Groq(api_key=settings.GROQ_API_KEY)
@@ -89,6 +90,29 @@ async def create_post(
     )
     db.add(activity)
     db.commit()
+
+    # ---- Handle mentions ----
+    if post.content:
+        # Find all @username patterns
+        mentioned_usernames = set(re.findall(r'@([\w.-]+)', post.content))
+        if mentioned_usernames:
+            # Look up mentioned local users, excluding the author
+            mentioned_users = db.query(User).filter(
+                User.username.in_(mentioned_usernames),
+                User.id != user.id
+            ).all()
+
+            for mentioned_user in mentioned_users:
+                notification = Notification(
+                    recipient_id=mentioned_user.id,
+                    actor_id=user.id,
+                    type="mention",
+                    object_id=post.id
+                )
+                db.add(notification)
+            
+            if mentioned_users:
+                db.commit()
 
     deliver_activity(activity, user=user, db=db)
     return post
