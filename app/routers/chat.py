@@ -54,7 +54,17 @@ def get_messages(user1: str, user2: str, db: Session = Depends(get_db)):
         )
     ).order_by(Message.created_at).all()
 
-    return messages
+    return [
+        {
+            "id": msg.id,
+            "sender_id": msg.sender_id,
+            "receiver_id": msg.receiver_id,
+            "content": msg.content,
+            "is_read": msg.is_read,
+            "created_at": msg.created_at
+        }
+        for msg in messages
+    ]
 
 
 @router.get("/conversations")
@@ -100,4 +110,13 @@ def get_conversations(
         .all()
     )
 
-    return results
+    return [
+        {
+            "other_user": r.other_user,
+            "username": r.username,
+            "avatar_url": r.avatar_url,
+            "content": r.content,
+            "created_at": r.created_at
+        }
+        for r in results
+    ]
