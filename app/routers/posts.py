@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, R
 from sqlalchemy.orm import Session
 from app.database import get_db
 from sqlalchemy import or_, and_, exists
-from app.models import Post, User, Activity, Connection, Like, Comment
+from app.models import Notification, Post, User, Activity, Connection, Like, Comment
 from app.dependencies import get_current_user
 from app.config import settings
 from app.services.federation import (
@@ -404,6 +404,15 @@ def like_post(
     db.add(like)
     post.like_count += 1
 
+    if post.user_id != user.id:
+        notification = Notification(
+            recipient_id=post.user_id,
+            actor_id=user.id,
+            type="like",
+            object_id=post.id
+        )
+        db.add(notification)
+
     db.commit()
     redis_client.delete(f"timeline:{user.id}")
     return {"message": "Liked"}
@@ -573,7 +582,7 @@ async def create_comment(
 
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-
+  
     comment = Comment(
         id=str(uuid.uuid4()),
         content=content,
@@ -585,6 +594,16 @@ async def create_comment(
 
     post.comment_count += 1
 
+    if post.user_id != current_user.id:
+        notification = Notification(
+            recipient_id=post.user_id,
+            actor_id=current_user.id,
+            type="comment",
+            object_id=post.id
+        )
+        db.add(notification)
+
+    db.commit()
     db.commit()
 
     return {
