@@ -16,28 +16,59 @@ async def chat_socket(websocket: WebSocket, user_id: str):
     try:
         while True:
             data = await websocket.receive_json()
+            msg_type = data.get("type", "chat")
 
-            receiver_id = data["receiver_id"]
-            content = data["content"]
+            if msg_type == "read_receipt":
+                sender_id = data.get("sender_id")
+                if sender_id:
+                    with SessionLocal() as db:
+                        unread_msgs = db.query(Message).filter(
+                            Message.sender_id == sender_id,
+                            Message.receiver_id == user_id,
+                            Message.is_read == False
+                        ).all()
+                        
+                        if unread_msgs:
+                            for msg in unread_msgs:
+                                msg.is_read = True
+                            db.commit()
+                            
+                            await manager.send_personal_message(
+                                sender_id,
+                                {
+                                    "type": "read_receipt",
+                                    "reader_id": user_id
+                                }
+                            )
 
-            # Save to database using a fresh session
-            with SessionLocal() as db:
-                msg = Message(
-                    sender_id=user_id,
-                    receiver_id=receiver_id,
-                    content=content
+            elif msg_type == "chat":
+                receiver_id = data["receiver_id"]
+                content = data["content"]
+
+                # Save to database using a fresh session
+                with SessionLocal() as db:
+                    msg = Message(
+                        sender_id=user_id,
+                        receiver_id=receiver_id,
+                        content=content
+                    )
+                    db.add(msg)
+                    db.commit()
+                    msg_id = msg.id
+                    created_at = msg.created_at.isoformat()
+
+                # Broadcast real-time message
+                await manager.send_personal_message(
+                    receiver_id,
+                    {
+                        "type": "chat",
+                        "id": msg_id,
+                        "sender_id": user_id,
+                        "content": content,
+                        "is_read": False,
+                        "created_at": created_at
+                    }
                 )
-                db.add(msg)
-                db.commit()
-
-            # Broadcast real-time message
-            await manager.send_personal_message(
-                receiver_id,
-                {
-                    "sender_id": user_id,
-                    "content": content
-                }
-            )
 
     except Exception as e:
         print(f"WebSocket closed or error for user {user_id}: {e}")
