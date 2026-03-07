@@ -70,6 +70,15 @@ async def chat_socket(websocket: WebSocket, user_id: str):
                     }
                 )
 
+            elif msg_type.startswith("webrtc_"):
+                # Forward WebRTC signaling messages directly to the receiver without saving to DB
+                receiver_id = data.get("receiver_id")
+                if receiver_id:
+                    # Pass along the entire payload to the receiver
+                    # The sender_id is explicitly injected so the receiver knows who it's from
+                    payload = {**data, "sender_id": user_id}
+                    await manager.send_personal_message(receiver_id, payload)
+
     except Exception as e:
         print(f"WebSocket closed or error for user {user_id}: {e}")
         manager.disconnect(user_id)
