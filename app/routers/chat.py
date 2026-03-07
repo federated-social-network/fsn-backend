@@ -74,9 +74,20 @@ async def chat_socket(websocket: WebSocket, user_id: str):
                 # Forward WebRTC signaling messages directly to the receiver without saving to DB
                 receiver_id = data.get("receiver_id")
                 if receiver_id:
+                    # Fetch sender details to include in signaling (useful for receiver UI)
+                    sender_info = {}
+                    with SessionLocal() as db:
+                        sender = db.query(User).filter(User.id == user_id).first()
+                        if sender:
+                            sender_info = {
+                                "display_name": sender.display_name,
+                                "avatar_url": sender.avatar_url,
+                                "username": sender.username
+                            }
+                    
                     # Pass along the entire payload to the receiver
-                    # The sender_id is explicitly injected so the receiver knows who it's from
-                    payload = {**data, "sender_id": user_id}
+                    # The sender_id and sender_info are explicitly injected so the receiver knows who it's from
+                    payload = {**data, "sender_id": user_id, "sender_info": sender_info}
                     success = await manager.send_personal_message(receiver_id, payload)
 
                     if not success and msg_type == "webrtc_offer":
