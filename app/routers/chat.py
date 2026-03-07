@@ -77,7 +77,13 @@ async def chat_socket(websocket: WebSocket, user_id: str):
                     # Pass along the entire payload to the receiver
                     # The sender_id is explicitly injected so the receiver knows who it's from
                     payload = {**data, "sender_id": user_id}
-                    await manager.send_personal_message(receiver_id, payload)
+                    success = await manager.send_personal_message(receiver_id, payload)
+
+                    if not success and msg_type == "webrtc_offer":
+                        await manager.send_personal_message(user_id, {
+                            "type": "webrtc_error",
+                            "message": "User is currently offline."
+                        })
 
     except Exception as e:
         print(f"WebSocket closed or error for user {user_id}: {e}")

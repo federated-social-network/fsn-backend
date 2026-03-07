@@ -11,9 +11,11 @@ class ConnectionManager:
     def disconnect(self, user_id: str):
         self.active_connections.pop(user_id, None)
 
-    async def send_personal_message(self, user_id: str, message: dict):
+    async def send_personal_message(self, user_id: str, message: dict) -> bool:
         if user_id in self.active_connections:
             await self.active_connections[user_id].send_json(message)
+            return True
+        return False
 
 
 manager = ConnectionManager()
