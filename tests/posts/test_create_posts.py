@@ -1,4 +1,11 @@
 def test_create_posts(client):
-    response = client.post("/posts", params={"content": "This is a test post."})
-    print(response.json())
+    response = client.post(
+        "/posts/",
+        data={
+            "visibility": "public",
+            "content": "This is a test post.",
+        }
+    )
+
     assert response.status_code == 200
+
