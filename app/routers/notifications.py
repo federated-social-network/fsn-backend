@@ -1,16 +1,14 @@
 import uuid
 from urllib.parse import urlparse
 
-from fastapi import (APIRouter, Depends, File, Form, HTTPException, Request,
-                     UploadFile)
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy import and_, desc, exists, or_
 from sqlalchemy.orm import Session, aliased
 
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import (Activity, Comment, Connection, Like, Notification,
-                        Post, User)
+from app.models import Activity, Comment, Connection, Like, Notification, Post, User
 
 router = APIRouter()
 

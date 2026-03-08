@@ -7,9 +7,14 @@ from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth import (authenticate_user, create_access_token,
-                      create_refresh_token, initiate_password_reset,
-                      reset_password, verify_otp)
+from app.auth import (
+    authenticate_user,
+    create_access_token,
+    create_refresh_token,
+    initiate_password_reset,
+    reset_password,
+    verify_otp,
+)
 from app.config import settings
 from app.database import get_db
 from app.models import User
