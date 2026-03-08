@@ -16,9 +16,7 @@ router = APIRouter()
 
 
 @router.get("/search_users")
-def search_users(
-    q: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+def search_users(q: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Search for users. Supports:
     - Local prefix search: "alice" → finds local users starting with 'alice'
@@ -36,9 +34,7 @@ def search_users(
     # --- Local prefix search ---
     search_pattern = f"{q}%"
 
-    matching_users = (
-        db.query(User).filter(User.username.ilike(search_pattern)).limit(10).all()
-    )
+    matching_users = db.query(User).filter(User.username.ilike(search_pattern)).limit(10).all()
 
     if not matching_users:
         return []
@@ -46,9 +42,7 @@ def search_users(
     # Get all connected local user IDs for current user (accepted)
     connected_ids = set()
     connections = (
-        db.query(Connection)
-        .filter(Connection.local_user_id == user.id, Connection.status == "accepted")
-        .all()
+        db.query(Connection).filter(Connection.local_user_id == user.id, Connection.status == "accepted").all()
     )
     for conn in connections:
         if conn.target_local_user_id:
@@ -69,9 +63,7 @@ def search_users(
     # Get pending connection target IDs
     pending_ids = set()
     pending_connections = (
-        db.query(Connection)
-        .filter(Connection.local_user_id == user.id, Connection.status == "pending")
-        .all()
+        db.query(Connection).filter(Connection.local_user_id == user.id, Connection.status == "pending").all()
     )
     for conn in pending_connections:
         if conn.target_local_user_id:
@@ -116,9 +108,7 @@ def _search_remote_user(handle: str, user, db):
 
     # Check if we already have a connection to this remote user
     # We need to resolve the actor URL first
-    webfinger_url = (
-        f"https://{remote_domain}/.well-known/webfinger?resource=acct:{handle}"
-    )
+    webfinger_url = f"https://{remote_domain}/.well-known/webfinger?resource=acct:{handle}"
 
     try:
         wf_resp = httpx.get(webfinger_url, timeout=10)
@@ -195,18 +185,13 @@ def get_current_user_info(user: User = Depends(get_current_user)):
 
 
 @router.get("/get_user/{username}")
-def get_user_profile(
-    username: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+def get_user_profile(username: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.username == username).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
     posts = (
-        db.query(Post)
-        .filter(Post.user_id == db_user.id, Post.is_remote == False)
-        .order_by(desc(Post.created_at))
-        .all()
+        db.query(Post).filter(Post.user_id == db_user.id, Post.is_remote == False).order_by(desc(Post.created_at)).all()
     )
 
     return {
@@ -225,30 +210,22 @@ def get_user_profile(
             for post in posts
         ],
         "profile_url": db_user.avatar_url,
-        "bio":db_user.bio,
-        "display_name":db_user.display_name
+        "bio": db_user.bio,
+        "display_name": db_user.display_name,
     }
 
 
 @router.get("/random_users")
 def random_users(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # All local user IDs I have ANY connection with (pending or accepted), either direction
-    connected_user_ids_outgoing = (
-        db.query(Connection.target_local_user_id)
-        .filter(
-            Connection.local_user_id == user.id,
-            Connection.target_local_user_id.isnot(None),
-        )
+    connected_user_ids_outgoing = db.query(Connection.target_local_user_id).filter(
+        Connection.local_user_id == user.id,
+        Connection.target_local_user_id.isnot(None),
     )
 
-    connected_user_ids_incoming = (
-        db.query(Connection.local_user_id)
-        .filter(Connection.target_local_user_id == user.id)
-    )
+    connected_user_ids_incoming = db.query(Connection.local_user_id).filter(Connection.target_local_user_id == user.id)
 
-    connected_user_ids = connected_user_ids_outgoing.union(
-        connected_user_ids_incoming
-    ).subquery()
+    connected_user_ids = connected_user_ids_outgoing.union(connected_user_ids_incoming).subquery()
 
     users = (
         db.query(User)
@@ -273,9 +250,7 @@ def random_users(user: User = Depends(get_current_user), db: Session = Depends(g
 
 
 @router.post("/connect/{username}")
-def connect_user(
-    username: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+def connect_user(username: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     target = db.query(User).filter(User.username == username).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -470,21 +445,14 @@ def accept_connection(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    connection = (
-        db.query(Connection)
-        .filter(Connection.id == connection_id, Connection.status == "pending")
-        .first()
-    )
+    connection = db.query(Connection).filter(Connection.id == connection_id, Connection.status == "pending").first()
 
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
 
     # Check authorization: user must be the target of this follow request
     is_local_target = connection.target_local_user_id == user.id
-    is_remote_follow_target = (
-        connection.remote_actor_url is not None
-        and connection.local_user_id == user.id
-    )
+    is_remote_follow_target = connection.remote_actor_url is not None and connection.local_user_id == user.id
 
     if not is_local_target and not is_remote_follow_target:
         raise HTTPException(status_code=403, detail="Not allowed")
@@ -525,6 +493,7 @@ def accept_connection(
                 body = json.dumps(accept_activity).encode("utf-8")
                 key_id = f"{actor_url}#main-key"
                 import httpx
+
                 signed_headers = sign_request(
                     private_key_pem=user.private_key,
                     method="POST",
@@ -540,12 +509,9 @@ def accept_connection(
                 )
             except Exception:
                 pass  # Best-effort delivery
-    
+
     notification = Notification(
-        recipient_id=connection.local_user_id,
-        actor_id=user.id,
-        type="follow_accept",
-        object_id=connection.id
+        recipient_id=connection.local_user_id, actor_id=user.id, type="follow_accept", object_id=connection.id
     )
 
     db.add(notification)
@@ -555,9 +521,7 @@ def accept_connection(
 
 
 @router.get("/connections/pending")
-def pending_connections(
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+def pending_connections(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Find pending connections where I am the target:
     # 1. Local-to-local: target_local_user_id == my id
     # 2. Remote-to-local: local_user_id == my id AND remote_actor_url is not null
@@ -569,10 +533,7 @@ def pending_connections(
                 # Local follow requests targeting me
                 Connection.target_local_user_id == user.id,
                 # Remote follow requests targeting me
-                (
-                    (Connection.local_user_id == user.id)
-                    & (Connection.remote_actor_url.isnot(None))
-                ),
+                ((Connection.local_user_id == user.id) & (Connection.remote_actor_url.isnot(None))),
             ),
         )
         .all()
@@ -610,9 +571,7 @@ def pending_connections(
 
 
 @router.get("/count_connections")
-def count_connections(
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+def count_connections(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Count accepted connections where I am the local_user_id
     count = (
         db.query(Connection)
@@ -627,9 +586,7 @@ def count_connections(
 
 
 @router.get("/list_connections")
-def list_connections(
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+def list_connections(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Get accepted connections where I am the local_user_id
     connections = (
         db.query(Connection)
@@ -645,9 +602,7 @@ def list_connections(
     for conn in connections:
         if conn.target_local_user_id:
             # Local connection — look up the user
-            target = (
-                db.query(User).filter(User.id == conn.target_local_user_id).first()
-            )
+            target = db.query(User).filter(User.id == conn.target_local_user_id).first()
             if target:
                 results.append(
                     {
@@ -672,9 +627,7 @@ def list_connections(
 
 
 @router.post("/remove_connection/{username:path}")
-def remove_connection(
-    username: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+def remove_connection(username: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Check if this is a remote user handle (contains @)
     if "@" in username:
         # Remote user — find the connection by matching remote_actor_url
@@ -778,9 +731,7 @@ async def upload_avatar(
     filename = f"{uuid.uuid4()}.jpg"
 
     # Upload to Supabase
-    supabase.storage.from_("avatars").upload(
-        filename, contents, {"content-type": file.content_type}
-    )
+    supabase.storage.from_("avatars").upload(filename, contents, {"content-type": file.content_type})
 
     public_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/avatars/{filename}"
 
@@ -812,7 +763,7 @@ async def update_profile(
 
     if display_name is not None:
         db_user.display_name = display_name
-    
+
     if image:
         contents = await image.read()
 
@@ -825,11 +776,9 @@ async def update_profile(
         filename = f"{uuid.uuid4()}.jpg"
 
         # Upload to Supabase
-        supabase.storage.from_("posts").upload(
-            filename, contents, {"content-type": image.content_type}
-        )
+        supabase.storage.from_("posts").upload(filename, contents, {"content-type": image.content_type})
 
-        image_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/posts/{filename}" 
+        image_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/posts/{filename}"
         db_user.avatar_url = image_url
 
     db.commit()

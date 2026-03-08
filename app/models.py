@@ -138,9 +138,8 @@ class Like(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (
-        UniqueConstraint("user_id", "post_id", name="unique_user_post_like"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "post_id", name="unique_user_post_like"),)
+
 
 class Comment(Base):
     __tablename__ = "comments"
@@ -163,9 +162,7 @@ class Comment(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (
-        UniqueConstraint("user_id", "post_id", "content", name="unique_comment"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "post_id", "content", name="unique_comment"),)
 
 
 class Message(Base):
@@ -182,9 +179,7 @@ class Message(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (
-        Index("idx_chat_pair", "sender_id", "receiver_id"),
-    )
+    __table_args__ = (Index("idx_chat_pair", "sender_id", "receiver_id"),)
 
 
 class Notification(Base):
@@ -192,19 +187,11 @@ class Notification(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
 
-    recipient_id = Column(
-        String,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False
-    )
+    recipient_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
-    actor_id = Column(
-        String,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False
-    )
+    actor_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
-    type = Column(String, nullable=False)  
+    type = Column(String, nullable=False)
     # examples: follow_request, follow_accept, message
 
     object_id = Column(String, nullable=True)
@@ -214,6 +201,4 @@ class Notification(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (
-        Index("idx_notification_recipient", "recipient_id"),
-    )
+    __table_args__ = (Index("idx_notification_recipient", "recipient_id"),)

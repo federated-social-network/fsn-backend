@@ -13,11 +13,10 @@ from app.auth import (
     initiate_password_reset,
     verify_otp,
     reset_password,
-    create_refresh_token
+    create_refresh_token,
 )
 from app.config import settings
 from app.services.crypto import generate_rsa_keypair
-
 
 router = APIRouter()
 
@@ -40,7 +39,9 @@ class ResetPasswordRequest(BaseModel):
 def register(username: str, password: str, email: str, db: Session = Depends(get_db)):
     username = username.strip()
     if not re.match(r"^[a-zA-Z0-9_-]+$", username):
-        raise HTTPException(status_code=400, detail="Username can only contain alphanumeric characters, dashes (-), and underscores (_)")
+        raise HTTPException(
+            status_code=400, detail="Username can only contain alphanumeric characters, dashes (-), and underscores (_)"
+        )
     try:
         private_key, public_key = generate_rsa_keypair()
         user = User(
@@ -66,14 +67,12 @@ def login(username: str, password: str, db: Session = Depends(get_db)):
     user = authenticate_user(username, password, db)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid Credentials")
-    
-    payload = { "user_id": user.id,
-                "username": user.username,
-                "instance": settings.INSTANCE_NAME}
+
+    payload = {"user_id": user.id, "username": user.username, "instance": settings.INSTANCE_NAME}
     access_token = create_access_token(payload)
     refresh_token = create_refresh_token(payload)
 
-    return {"access_token": access_token,"refresh_token":refresh_token}
+    return {"access_token": access_token, "refresh_token": refresh_token}
 
 
 @router.post("/forgot-password")
@@ -119,20 +118,14 @@ def reset_user_password(request: ResetPasswordRequest, db: Session = Depends(get
 def refresh_token(refresh_token: str):
 
     try:
-        payload = jwt.decode(
-            refresh_token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM]
-        )
+        payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid token type")
 
-        new_access_token = create_access_token({
-            "user_id": payload["user_id"],
-            "username": payload["username"],
-            "instance": payload["instance"]
-        })
+        new_access_token = create_access_token(
+            {"user_id": payload["user_id"], "username": payload["username"], "instance": payload["instance"]}
+        )
 
         return {"access_token": new_access_token}
 

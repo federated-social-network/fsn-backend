@@ -25,16 +25,12 @@ router = APIRouter()
 client = Groq(api_key=settings.GROQ_API_KEY)
 
 
-redis_client = redis.Redis(
-    host="10.159.248.211",
-    port=6379,
-    decode_responses=True
-)
+redis_client = redis.Redis(host="10.159.248.211", port=6379, decode_responses=True)
 
 
 @router.post("/posts")
 async def create_post(
-    visibility: str = "public", 
+    visibility: str = "public",
     content: str | None = Form(None),
     image: UploadFile = File(None),
     user: User = Depends(get_current_user),
@@ -42,7 +38,7 @@ async def create_post(
 ):
     if content is None:
         content = ""
-        
+
     if not content.strip() and not image:
         raise HTTPException(status_code=400, detail="Post must contain text or an image")
 
@@ -60,9 +56,7 @@ async def create_post(
         filename = f"{uuid.uuid4()}.jpg"
 
         # Upload to Supabase
-        supabase.storage.from_("posts").upload(
-            filename, contents, {"content-type": image.content_type}
-        )
+        supabase.storage.from_("posts").upload(filename, contents, {"content-type": image.content_type})
 
         image_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/posts/{filename}"
 
@@ -74,7 +68,7 @@ async def create_post(
         author=user.username,
         origin_instance=settings.INSTANCE_NAME,
         is_remote=False,
-        visibility=visibility
+        visibility=visibility,
     )
     db.add(post)
     db.commit()
@@ -94,23 +88,17 @@ async def create_post(
     # ---- Handle mentions ----
     if post.content:
         # Find all @username patterns
-        mentioned_usernames = set(re.findall(r'@([\w.-]+)', post.content))
+        mentioned_usernames = set(re.findall(r"@([\w.-]+)", post.content))
         if mentioned_usernames:
             # Look up mentioned local users, excluding the author
-            mentioned_users = db.query(User).filter(
-                User.username.in_(mentioned_usernames),
-                User.id != user.id
-            ).all()
+            mentioned_users = db.query(User).filter(User.username.in_(mentioned_usernames), User.id != user.id).all()
 
             for mentioned_user in mentioned_users:
                 notification = Notification(
-                    recipient_id=mentioned_user.id,
-                    actor_id=user.id,
-                    type="mention",
-                    object_id=post.id
+                    recipient_id=mentioned_user.id, actor_id=user.id, type="mention", object_id=post.id
                 )
                 db.add(notification)
-            
+
             if mentioned_users:
                 db.commit()
 
@@ -121,7 +109,6 @@ async def create_post(
 @router.get("/get_posts")
 def get_posts(db: Session = Depends(get_db)):
     return db.query(Post).order_by(Post.id.desc()).all()
-
 
 
 @router.get("/timeline")
@@ -159,7 +146,7 @@ def timeline(
             or_(
                 Post.visibility == "public",
                 and_(Post.visibility == "followers", connection_exists),
-                Post.user_id == current_user.id
+                Post.user_id == current_user.id,
             )
         )
         .order_by(Post.created_at.desc())
@@ -172,10 +159,7 @@ def timeline(
     like_rows = (
         db.query(Like.post_id, User.avatar_url)
         .join(User, Like.user_id == User.id)
-        .filter(
-            Like.post_id.in_(posts),
-            User.avatar_url.isnot(None)
-        )
+        .filter(Like.post_id.in_(posts), User.avatar_url.isnot(None))
         .all()
     )
 
@@ -199,7 +183,7 @@ def timeline(
             "like_count": post.like_count,
             "is_liked": liked_post_id is not None,
             "liked_by": like_map.get(post.id, []),
-            "comment_count":post.comment_count
+            "comment_count": post.comment_count,
         }
         for post, user, liked_post_id in results
     ]
@@ -209,14 +193,10 @@ def timeline(
 
 
 @router.get("/timeline_connected_users")
-def timeline_connected_users(
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+def timeline_connected_users(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
 
     connections = (
-        db.query(Connection)
-        .filter(Connection.local_user_id == user.id, Connection.status == "accepted")
-        .all()
+        db.query(Connection).filter(Connection.local_user_id == user.id, Connection.status == "accepted").all()
     )
 
     connected_local_user_ids = []
@@ -268,10 +248,7 @@ def timeline_connected_users(
     like_rows = (
         db.query(Like.post_id, User.avatar_url)
         .join(User, Like.user_id == User.id)
-        .filter(
-            Like.post_id.in_(post_ids),
-            User.avatar_url.isnot(None)
-        )
+        .filter(Like.post_id.in_(post_ids), User.avatar_url.isnot(None))
         .all()
     )
 
@@ -283,14 +260,7 @@ def timeline_connected_users(
             like_map[post_id].append(avatar)
 
     # check if current user liked
-    liked_posts = (
-        db.query(Like.post_id)
-        .filter(
-            Like.post_id.in_(post_ids),
-            Like.user_id == user.id
-        )
-        .all()
-    )
+    liked_posts = db.query(Like.post_id).filter(Like.post_id.in_(post_ids), Like.user_id == user.id).all()
 
     liked_set = {p[0] for p in liked_posts}
 
@@ -307,21 +277,17 @@ def timeline_connected_users(
             "display_name": u.display_name if u else None,
             "liked_by": like_map.get(post.id, []),
             "is_liked": post.id in liked_set,
-            "comment_count":post.comment_count
-            
+            "comment_count": post.comment_count,
         }
         for post, u in all_results
     ]
 
+
 @router.get("/debug/timeline_state")
-def debug_timeline_state(
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+def debug_timeline_state(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Debug endpoint to see exactly what's in the DB for the following timeline."""
     connections = (
-        db.query(Connection)
-        .filter(Connection.local_user_id == user.id, Connection.status == "accepted")
-        .all()
+        db.query(Connection).filter(Connection.local_user_id == user.id, Connection.status == "accepted").all()
     )
 
     remote_connections = []
@@ -335,21 +301,17 @@ def debug_timeline_state(
             friendly = f"{path_name}@{parsed.hostname}"
             derived_authors.append(friendly)
             derived_actor_urls.append(c.remote_actor_url)
-            remote_connections.append({
-                "connection_id": c.id,
-                "remote_actor_url": c.remote_actor_url,
-                "remote_inbox_url": c.remote_inbox_url,
-                "status": c.status,
-                "derived_friendly_name": friendly,
-            })
+            remote_connections.append(
+                {
+                    "connection_id": c.id,
+                    "remote_actor_url": c.remote_actor_url,
+                    "remote_inbox_url": c.remote_inbox_url,
+                    "status": c.status,
+                    "derived_friendly_name": friendly,
+                }
+            )
 
-    remote_posts = (
-        db.query(Post)
-        .filter(Post.is_remote == True)
-        .order_by(Post.created_at.desc())
-        .limit(20)
-        .all()
-    )
+    remote_posts = db.query(Post).filter(Post.is_remote == True).order_by(Post.created_at.desc()).limit(20).all()
 
     return {
         "accepted_remote_connections": remote_connections,
@@ -367,24 +329,24 @@ def debug_timeline_state(
         ],
     }
 
+
 def _strip_html_for_display(content: str) -> str:
     """Strip any remaining HTML from post content for clean display."""
     if not content:
         return content
     import re
+
     # If content looks like it has HTML tags, strip them
     if "<" in content and ">" in content:
-        text = re.sub(r'<br\s*/?>', '\n', content)
-        text = re.sub(r'</p>\s*<p>', '\n\n', text)
-        text = re.sub(r'<[^>]+>', '', text)
+        text = re.sub(r"<br\s*/?>", "\n", content)
+        text = re.sub(r"</p>\s*<p>", "\n\n", text)
+        text = re.sub(r"<[^>]+>", "", text)
         return text.strip()
     return content
 
 
 @router.delete("/delete/{post_id}")
-def delete_post(
-    post_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+def delete_post(post_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
@@ -409,16 +371,12 @@ def delete_post(
 
 
 @router.post("/posts/{post_id}/like")
-def like_post(
-    post_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+def like_post(post_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    existing = (
-        db.query(Like).filter(Like.user_id == user.id, Like.post_id == post_id).first()
-    )
+    existing = db.query(Like).filter(Like.user_id == user.id, Like.post_id == post_id).first()
 
     if existing:
         raise HTTPException(status_code=400, detail="Already liked")
@@ -429,12 +387,7 @@ def like_post(
     post.like_count += 1
 
     if post.user_id != user.id:
-        notification = Notification(
-            recipient_id=post.user_id,
-            actor_id=user.id,
-            type="like",
-            object_id=post.id
-        )
+        notification = Notification(recipient_id=post.user_id, actor_id=user.id, type="like", object_id=post.id)
         db.add(notification)
 
     db.commit()
@@ -443,12 +396,8 @@ def like_post(
 
 
 @router.delete("/posts/{post_id}/like")
-def unlike_post(
-    post_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
-    like = (
-        db.query(Like).filter(Like.user_id == user.id, Like.post_id == post_id).first()
-    )
+def unlike_post(post_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    like = db.query(Like).filter(Like.user_id == user.id, Like.post_id == post_id).first()
 
     if not like:
         raise HTTPException(status_code=404, detail="Like not found")
@@ -491,27 +440,20 @@ async def complete_post(content: str = Form(...)):
                             - Expand short inputs into a richer, well-structured version.
                             - Keep tone neutral and suitable for a social platform.
                             - Return ONLY the improved text.
-                            """
+                            """,
                 },
-                {
-                    "role": "user",
-                    "content": content
-                }
+                {"role": "user", "content": content},
             ],
             temperature=0.5,
-            max_tokens=300
+            max_tokens=300,
         )
 
         improved_text = response.choices[0].message.content.strip()
 
-        return {
-            "original": content,
-            "completed": improved_text
-        }
+        return {"original": content, "completed": improved_text}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 @router.post("/post/eloboratePost")
@@ -540,27 +482,21 @@ async def eloborate_post(content: str = Form(...)):
                             - Expand short inputs into a richer, well-structured version.
                             - Keep tone neutral and suitable for a social platform.
                             - Return ONLY the improved text.
-                            """
+                            """,
                 },
-                {
-                    "role": "user",
-                    "content": content
-                }
+                {"role": "user", "content": content},
             ],
             temperature=0.5,
-            max_tokens=3000
+            max_tokens=3000,
         )
 
         improved_text = response.choices[0].message.content.strip()
 
-        return {
-            "original": content,
-            "completed": improved_text
-        }
+        return {"original": content, "completed": improved_text}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 
 @router.get("/debug/redis-health")
 async def redis_health():
@@ -587,13 +523,14 @@ async def redis_health():
             "status": "error",
             "error": str(e),
         }
-    
+
+
 @router.post("/{post_id}/comments")
 async def create_comment(
     post_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
 
     body = await request.json()
@@ -606,7 +543,7 @@ async def create_comment(
 
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-  
+
     comment = Comment(
         id=str(uuid.uuid4()),
         content=content,
@@ -620,10 +557,7 @@ async def create_comment(
 
     if post.user_id != current_user.id:
         notification = Notification(
-            recipient_id=post.user_id,
-            actor_id=current_user.id,
-            type="comment",
-            object_id=post.id
+            recipient_id=post.user_id, actor_id=current_user.id, type="comment", object_id=post.id
         )
         db.add(notification)
 
@@ -637,6 +571,7 @@ async def create_comment(
         "post_id": comment.post_id,
         "created_at": comment.created_at,
     }
+
 
 @router.get("/{post_id}/comments")
 def get_comments(post_id: str, db: Session = Depends(get_db)):
@@ -655,10 +590,10 @@ def get_comments(post_id: str, db: Session = Depends(get_db)):
             "content": comment.content,
             "user_id": comment.user_id,
             "post_id": comment.post_id,
-            "avatar_url":user.avatar_url,
+            "avatar_url": user.avatar_url,
             "display_name": user.display_name,
             "created_at": comment.created_at,
-            "username":user.username
+            "username": user.username,
         }
         for comment, user in comments
     ]
@@ -668,7 +603,7 @@ def get_comments(post_id: str, db: Session = Depends(get_db)):
 def delete_comment(
     comment_id: str,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
 
     comment = db.query(Comment).filter(Comment.id == comment_id).first()

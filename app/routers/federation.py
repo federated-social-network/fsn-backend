@@ -13,15 +13,14 @@ from urllib.parse import urlparse
 from starlette.requests import ClientDisconnect
 
 
-
 def _strip_html(html: str) -> str:
     """Strip HTML tags from content, keeping only text."""
     if not html:
         return html
     # Remove HTML tags
-    text = re.sub(r'<br\s*/?>', '\n', html)  # Convert <br> to newline
-    text = re.sub(r'</p>\s*<p>', '\n\n', text)  # Convert paragraph breaks
-    text = re.sub(r'<[^>]+>', '', text)  # Remove all remaining tags
+    text = re.sub(r"<br\s*/?>", "\n", html)  # Convert <br> to newline
+    text = re.sub(r"</p>\s*<p>", "\n\n", text)  # Convert paragraph breaks
+    text = re.sub(r"<[^>]+>", "", text)  # Remove all remaining tags
     text = text.strip()
     return text
 
@@ -52,6 +51,7 @@ def _resolve_actor_display_name(actor_url: str) -> str:
         return f"{path_username}@{parsed.hostname}"
     except Exception:
         return actor_url
+
 
 router = APIRouter()
 
@@ -158,9 +158,7 @@ def get_actor(username: str, db: Session = Depends(get_db)):
 # Per-user inbox
 # ---------------------------------------------------------------------------
 @router.post("/users/{username}/inbox")
-async def user_inbox(
-    username: str, request: Request, db: Session = Depends(get_db)
-):
+async def user_inbox(username: str, request: Request, db: Session = Depends(get_db)):
     """
     Per-user inbox. Mastodon sends Follow, Undo, etc. here.
     Delegates to shared inbox logic.
@@ -204,6 +202,7 @@ async def shared_inbox(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
     return _process_inbox_activity(activity, db)
+
 
 def _process_inbox_activity(activity: dict, db: Session) -> dict:
     """
@@ -262,10 +261,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
         target_id = obj.get("id") if isinstance(obj, dict) else obj
         if target_id:
             post = (
-                db.query(Post)
-                .filter(Post.is_remote == True)
-                .filter(Post.id.endswith(target_id.split("/")[-1]))
-                .first()
+                db.query(Post).filter(Post.is_remote == True).filter(Post.id.endswith(target_id.split("/")[-1])).first()
             )
             if post:
                 db.delete(post)
@@ -490,11 +486,7 @@ def debug_connections(
     db: Session = Depends(get_db),
 ):
     """Debug endpoint to view all connections and their statuses."""
-    connections = (
-        db.query(Connection)
-        .filter(Connection.local_user_id == user.id)
-        .all()
-    )
+    connections = db.query(Connection).filter(Connection.local_user_id == user.id).all()
 
     return [
         {
@@ -534,19 +526,27 @@ def sync_remote_posts(
 
     synced = 0
     for conn in connections:
-        before_count = db.query(Post).filter(
-            Post.is_remote == True,
-            Post.author == conn.remote_actor_url,
-        ).count()
+        before_count = (
+            db.query(Post)
+            .filter(
+                Post.is_remote == True,
+                Post.author == conn.remote_actor_url,
+            )
+            .count()
+        )
 
         _fetch_remote_outbox_posts(conn.remote_actor_url, db)
 
-        after_count = db.query(Post).filter(
-            Post.is_remote == True,
-            Post.author == conn.remote_actor_url,
-        ).count()
+        after_count = (
+            db.query(Post)
+            .filter(
+                Post.is_remote == True,
+                Post.author == conn.remote_actor_url,
+            )
+            .count()
+        )
 
-        synced += (after_count - before_count)
+        synced += after_count - before_count
 
     return {
         "status": "synced",
@@ -678,11 +678,7 @@ def get_outbox(username: str, page: bool = False, db: Session = Depends(get_db))
     outbox_url = f"{actor_url}/outbox"
 
     # Count only local posts by this user
-    post_count = (
-        db.query(Post)
-        .filter(Post.user_id == user.id, Post.is_remote == False)
-        .count()
-    )
+    post_count = db.query(Post).filter(Post.user_id == user.id, Post.is_remote == False).count()
 
     if not page:
         return JSONResponse(
@@ -699,6 +695,7 @@ def get_outbox(username: str, page: bool = False, db: Session = Depends(get_db))
 
     # Return the first page with actual posts
     from sqlalchemy import desc
+
     posts = (
         db.query(Post)
         .filter(Post.user_id == user.id, Post.is_remote == False)
@@ -718,18 +715,22 @@ def get_outbox(username: str, page: bool = False, db: Session = Depends(get_db))
             "to": ["https://www.w3.org/ns/activitystreams#Public"],
         }
         if post.image_url:
-            note["attachment"] = [{
-                "type": "Image",
-                "mediaType": "image/jpeg",
-                "url": post.image_url,
-            }]
+            note["attachment"] = [
+                {
+                    "type": "Image",
+                    "mediaType": "image/jpeg",
+                    "url": post.image_url,
+                }
+            ]
 
-        items.append({
-            "type": "Create",
-            "actor": actor_url,
-            "published": post.created_at.isoformat() if post.created_at else None,
-            "object": note,
-        })
+        items.append(
+            {
+                "type": "Create",
+                "actor": actor_url,
+                "published": post.created_at.isoformat() if post.created_at else None,
+                "object": note,
+            }
+        )
 
     return JSONResponse(
         content={
@@ -755,9 +756,7 @@ def post_outbox(
     user: User = Depends(get_current_user),
 ):
     if user.username != username:
-        raise HTTPException(
-            status_code=403, detail="Cannot write to another actor's outbox"
-        )
+        raise HTTPException(status_code=403, detail="Cannot write to another actor's outbox")
 
     if activity.get("actor") != f"{settings.BASE_URL}/users/{username}":
         raise HTTPException(status_code=400, detail="Actor mismatch")
@@ -775,4 +774,3 @@ def post_outbox(
     db.refresh(new_activity)
 
     return {"status": "stored", "activity_id": new_activity.id}
-

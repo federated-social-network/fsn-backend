@@ -18,10 +18,11 @@ def create_refresh_token(data: dict, expires_days: int = 7):
     to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
+
 def create_access_token(data: dict, expires_minutes: int = 15):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=expires_minutes)
-    to_encode.update({"exp": expire,"type":"access"})
+    to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
@@ -112,9 +113,7 @@ def reset_password(reset_token: str, new_password: str, db) -> tuple[bool, str]:
     Returns (success, message)
     """
     try:
-        payload = jwt.decode(
-            reset_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-        )
+        payload = jwt.decode(reset_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id = payload.get("user_id")
         purpose = payload.get("purpose")
 

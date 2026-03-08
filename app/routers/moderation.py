@@ -12,6 +12,7 @@ LIKELIHOOD_MAP = (
     "VERY_LIKELY",
 )
 
+
 @router.post("/moderate-image")
 async def moderate_image(file: UploadFile = File(...)):
     try:

@@ -11,6 +11,7 @@ from app.config import settings
 
 router = APIRouter()
 
+
 @router.get("/notifications")
 def get_notifications(
     current_user: User = Depends(get_current_user),
@@ -33,26 +34,26 @@ def get_notifications(
     result = []
 
     for notif, actor, recipient in rows:
-        result.append({
-            "id": notif.id,
-            "type": notif.type,
-            "object_id": notif.object_id,
-            "created_at": notif.created_at,
-            "is_read": notif.is_read,
-
-            "actor": {
-                "id": actor.id,
-                "display_name": actor.display_name,
-                "avatar_url": actor.avatar_url,
-                "username": actor.username
-            },
-
-            "recipient": {
-                "id": recipient.id,
-                "display_name": recipient.display_name,
-                "avatar_url": recipient.avatar_url,
-                "username": recipient.username
+        result.append(
+            {
+                "id": notif.id,
+                "type": notif.type,
+                "object_id": notif.object_id,
+                "created_at": notif.created_at,
+                "is_read": notif.is_read,
+                "actor": {
+                    "id": actor.id,
+                    "display_name": actor.display_name,
+                    "avatar_url": actor.avatar_url,
+                    "username": actor.username,
+                },
+                "recipient": {
+                    "id": recipient.id,
+                    "display_name": recipient.display_name,
+                    "avatar_url": recipient.avatar_url,
+                    "username": recipient.username,
+                },
             }
-        })
+        )
 
     return result

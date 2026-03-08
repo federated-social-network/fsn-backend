@@ -18,11 +18,7 @@ def _send_with_gmail_oauth(email: str, subject: str, html: str, text: str) -> bo
         from google.auth.transport.requests import Request
         from googleapiclient.discovery import build
 
-        if (
-            not settings.GMAIL_CLIENT_ID
-            or not settings.GMAIL_CLIENT_SECRET
-            or not settings.GMAIL_REFRESH_TOKEN
-        ):
+        if not settings.GMAIL_CLIENT_ID or not settings.GMAIL_CLIENT_SECRET or not settings.GMAIL_REFRESH_TOKEN:
             print("Gmail OAuth2 credentials not configured")
             return False
 
@@ -58,12 +54,7 @@ def _send_with_gmail_oauth(email: str, subject: str, html: str, text: str) -> bo
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
 
         # Send message
-        result = (
-            service.users()
-            .messages()
-            .send(userId="me", body={"raw": raw_message})
-            .execute()
-        )
+        result = service.users().messages().send(userId="me", body={"raw": raw_message}).execute()
 
         print(f"Email sent successfully. Message ID: {result.get('id')}")
         return True

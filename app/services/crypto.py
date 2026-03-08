@@ -24,10 +24,14 @@ def generate_rsa_keypair() -> tuple[str, str]:
         encryption_algorithm=serialization.NoEncryption(),
     ).decode("utf-8")
 
-    public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8")
+    public_pem = (
+        private_key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode("utf-8")
+    )
 
     return private_pem, public_pem
 
@@ -79,9 +83,7 @@ def sign_request(
 
     signing_string = "\n".join(signed_parts)
 
-    private_key = serialization.load_pem_private_key(
-        private_key_pem.encode("utf-8"), password=None
-    )
+    private_key = serialization.load_pem_private_key(private_key_pem.encode("utf-8"), password=None)
 
     signature_bytes = private_key.sign(
         signing_string.encode("utf-8"),
@@ -131,9 +133,7 @@ def verify_http_signature(
         signing_parts = []
         for h in signed_headers:
             if h == "(request-target)":
-                signing_parts.append(
-                    f"(request-target): {method.lower()} {path}"
-                )
+                signing_parts.append(f"(request-target): {method.lower()} {path}")
             else:
                 # Case-insensitive header lookup
                 value = None
@@ -147,9 +147,7 @@ def verify_http_signature(
 
         signing_string = "\n".join(signing_parts)
 
-        public_key = serialization.load_pem_public_key(
-            public_key_pem.encode("utf-8")
-        )
+        public_key = serialization.load_pem_public_key(public_key_pem.encode("utf-8"))
 
         public_key.verify(
             signature,

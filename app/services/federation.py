@@ -97,6 +97,7 @@ def deliver_activity(activity, user=None, db=None):
 
     if db and user:
         from app.models import Connection
+
         # Find all remote actors who follow this user (they sent us a Follow)
         follower_connections = (
             db.query(Connection)
