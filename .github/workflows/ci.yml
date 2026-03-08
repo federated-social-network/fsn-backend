@@ -39,6 +39,7 @@ jobs:
 
       - name: Run test suite
         env:
+          PYTHONPATH: .
           DATABASE_URL: sqlite:///./test.db
           SECRET_KEY: test_secret_key_for_ci
           INSTANCE_NAME: TestInstance
