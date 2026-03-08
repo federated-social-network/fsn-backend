@@ -28,7 +28,7 @@ jobs:
     - name: Check code formatting
       run: |
         black --check app/ tests/ --line-length=120
-        isort --check-only app/ tests/
+        isort --check-only app/ tests/ --profile black
 
     - name: Lint code
       run: |
@@ -48,7 +48,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
     - name: Build Docker Image
       run: |
