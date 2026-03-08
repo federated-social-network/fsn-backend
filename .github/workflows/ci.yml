@@ -44,6 +44,9 @@ jobs:
           SECRET_KEY: test_secret_key_for_ci
           INSTANCE_NAME: TestInstance
           BASE_URL: http://localhost:8000
+          SUPABASE_SERVICE_KEY: test_key
+          SUPABASE_URL: https://test.supabase.co
+          GROQ_API_KEY: test_groq_key
         run: |
           make test
 
@@ -52,8 +55,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Build Docker Image
         run: |
