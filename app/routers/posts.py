@@ -15,7 +15,11 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import Activity, Comment, Connection, Like, Notification, Post, User
-from app.services.federation import build_create_activity, build_delete_activity, deliver_activity
+from app.services.federation import (
+    build_create_activity,
+    build_delete_activity,
+    deliver_activity,
+)
 from app.services.supabase_client import supabase
 
 router = APIRouter()
