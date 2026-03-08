@@ -1,16 +1,18 @@
 import json
 import re
+from urllib.parse import urlparse
+
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import Post, Activity, Connection, User
-from app.dependencies import get_current_user
-from app.config import settings
-from app.services.crypto import sign_request, verify_http_signature
-from urllib.parse import urlparse
 from starlette.requests import ClientDisconnect
+
+from app.config import settings
+from app.database import get_db
+from app.dependencies import get_current_user
+from app.models import Activity, Connection, Post, User
+from app.services.crypto import sign_request, verify_http_signature
 
 
 def _strip_html(html: str) -> str:

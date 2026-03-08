@@ -1,8 +1,9 @@
+import base64
 import random
 import string
-import base64
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 from app.config import settings
 
 
@@ -14,8 +15,8 @@ def generate_otp(length: int = 6) -> str:
 def _send_with_gmail_oauth(email: str, subject: str, html: str, text: str) -> bool:
     """Send email using Gmail API with OAuth2 credentials"""
     try:
-        from google.oauth2.credentials import Credentials
         from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
 
         if not settings.GMAIL_CLIENT_ID or not settings.GMAIL_CLIENT_SECRET or not settings.GMAIL_REFRESH_TOKEN:
@@ -70,8 +71,8 @@ def _send_with_smtp(email: str, subject: str, html: str, text: str) -> bool:
     """Send email using SMTP (legacy)"""
     try:
         import smtplib
-        from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
 
         if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
             print("Email credentials not configured")

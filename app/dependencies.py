@@ -1,8 +1,9 @@
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, Header, HTTPException
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
-from jose import jwt, JWTError
-from app.database import get_db
+
 from app.config import settings
+from app.database import get_db
 from app.models import User
 
 

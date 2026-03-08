@@ -1,25 +1,25 @@
-from sqlalchemy import and_, desc, or_
-from urllib.parse import urlparse
-import uuid
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Request
-from sqlalchemy.orm import Session
-from app.database import get_db
-from sqlalchemy import or_, and_, exists
-from app.models import Notification, Post, User, Activity, Connection, Like, Comment
-from app.dependencies import get_current_user
-from app.config import settings
-from app.services.federation import (
-    build_create_activity,
-    build_delete_activity,
-    deliver_activity,
-)
-from app.services.supabase_client import supabase
-from PIL import Image
-from io import BytesIO
-from groq import Groq
-import redis
 import json
 import re
+import uuid
+from io import BytesIO
+from urllib.parse import urlparse
+
+import redis
+from fastapi import (APIRouter, Depends, File, Form, HTTPException, Request,
+                     UploadFile)
+from groq import Groq
+from PIL import Image
+from sqlalchemy import and_, desc, exists, or_
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.database import get_db
+from app.dependencies import get_current_user
+from app.models import (Activity, Comment, Connection, Like, Notification,
+                        Post, User)
+from app.services.federation import (build_create_activity,
+                                     build_delete_activity, deliver_activity)
+from app.services.supabase_client import supabase
 
 router = APIRouter()
 client = Groq(api_key=settings.GROQ_API_KEY)

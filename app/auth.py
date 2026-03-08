@@ -1,9 +1,11 @@
-from datetime import datetime, timedelta
-from jose import jwt
-from app.config import settings
-from app.models import User, PasswordReset
-from app.email_service import generate_otp, send_otp_email
 import uuid
+from datetime import datetime, timedelta
+
+from jose import jwt
+
+from app.config import settings
+from app.email_service import generate_otp, send_otp_email
+from app.models import PasswordReset, User
 
 
 def verify_password(plain_password, hashed_password):

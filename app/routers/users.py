@@ -1,16 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
-from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, or_
-from app.database import get_db
-from app.models import Notification, User, Post, Connection
-from app.dependencies import get_current_user
-from app.config import settings
-from app.services.federation import build_follow_activity, deliver_raw_activity
-from app.routers.federation import _resolve_actor_display_name
-from app.services.supabase_client import supabase
-from PIL import Image
-from io import BytesIO
 import uuid
+from io import BytesIO
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from PIL import Image
+from sqlalchemy import desc, func, or_
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.database import get_db
+from app.dependencies import get_current_user
+from app.models import Connection, Notification, Post, User
+from app.routers.federation import _resolve_actor_display_name
+from app.services.federation import build_follow_activity, deliver_raw_activity
+from app.services.supabase_client import supabase
 
 router = APIRouter()
 
@@ -313,9 +315,11 @@ def connect_remote_user(
     Follow a remote user (e.g., alice@mastodon.social).
     Resolves via WebFinger, fetches actor profile, sends signed Follow.
     """
-    import httpx
     import json
     from urllib.parse import urlparse
+
+    import httpx
+
     from app.services.crypto import sign_request
 
     # Parse handle: "alice@mastodon.social" or "@alice@mastodon.social"
@@ -471,6 +475,7 @@ def accept_connection(
     elif is_remote_follow_target:
         # Remote follow: send Accept activity back to the remote actor
         import json
+
         from app.services.crypto import sign_request
 
         actor_url = f"{settings.BASE_URL}/users/{user.username}"

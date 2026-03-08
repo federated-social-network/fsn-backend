@@ -1,13 +1,14 @@
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
-from app.main import app
-from app.routers.users import get_current_user
-from app.models import User
-import uuid
-from sqlalchemy.orm import Session
-from app.database import get_db
 from sqlalchemy import event
-from app.database import engine, SessionLocal
+from sqlalchemy.orm import Session
+
+from app.database import SessionLocal, engine, get_db
+from app.main import app
+from app.models import User
+from app.routers.users import get_current_user
 
 
 @pytest.fixture

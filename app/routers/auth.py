@@ -1,21 +1,18 @@
-import uuid
 import re
-from jose import jwt
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
+from jose import jwt
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.auth import (authenticate_user, create_access_token,
+                      create_refresh_token, initiate_password_reset,
+                      reset_password, verify_otp)
+from app.config import settings
 from app.database import get_db
 from app.models import User
-from app.auth import (
-    authenticate_user,
-    create_access_token,
-    initiate_password_reset,
-    verify_otp,
-    reset_password,
-    create_refresh_token,
-)
-from app.config import settings
 from app.services.crypto import generate_rsa_keypair
 
 router = APIRouter()

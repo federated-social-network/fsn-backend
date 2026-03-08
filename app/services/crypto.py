@@ -3,12 +3,12 @@ RSA key management and HTTP Signature utilities for ActivityPub federation.
 """
 
 import base64
-import hashlib
 import datetime
+import hashlib
 from urllib.parse import urlparse
 
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 
 def generate_rsa_keypair() -> tuple[str, str]:

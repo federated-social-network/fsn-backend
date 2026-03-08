@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.database import Base, engine
-from app.routers import auth, posts, users, federation, moderation, chat, notifications
+from app.routers import (auth, chat, federation, moderation, notifications,
+                         posts, users)
 
 # Create Tables
 

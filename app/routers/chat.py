@@ -1,10 +1,11 @@
-from fastapi import APIRouter, WebSocket, Depends
+from fastapi import APIRouter, Depends, WebSocket
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, case, func
-from app.database import get_db, SessionLocal
+
+from app.database import SessionLocal, get_db
+from app.dependencies import get_current_user
 from app.models import Message, User
 from app.services.connection_manager import manager
-from app.dependencies import get_current_user
 
 router = APIRouter()
 

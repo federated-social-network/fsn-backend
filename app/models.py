@@ -1,20 +1,12 @@
-from sqlalchemy import (
-    Column,
-    String,
-    Boolean,
-    Text,
-    ForeignKey,
-    JSON,
-    Integer,
-    UniqueConstraint,
-    DateTime,
-)
-from sqlalchemy.sql import func
-from app.database import Base
-from passlib.context import CryptContext
-from datetime import datetime
 import uuid
-from sqlalchemy import Index
+from datetime import datetime
+
+from passlib.context import CryptContext
+from sqlalchemy import (JSON, Boolean, Column, DateTime, ForeignKey, Index,
+                        Integer, String, Text, UniqueConstraint)
+from sqlalchemy.sql import func
+
+from app.database import Base
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
