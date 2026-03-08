@@ -1,17 +1,27 @@
 from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import settings
 
-DATABASE_URL = settings.DATABASE_URL
+# Engine
+engine = create_engine(
+    settings.DATABASE_URL,
+    connect_args=(
+        {"sslmode": "require", "options": "-c statement_timeout=5000"} if "postgresql" in settings.DATABASE_URL else {}
+    ),
+    pool_pre_ping=True,
+)
 
-connect_args = {}
+# Session
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-if DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
-else:
-    connect_args = {
-        "sslmode": "require",
-        "options": "-c statement_timeout=5000",
-    }
+# Base for models
+Base = declarative_base()
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
