@@ -70,8 +70,7 @@ def login(username: str, password: str, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid Credentials")
 
-    payload = {"user_id": user.id, "username": user.username,
-               "instance": settings.INSTANCE_NAME}
+    payload = {"user_id": user.id, "username": user.username, "instance": settings.INSTANCE_NAME}
     access_token = create_access_token(payload)
     refresh_token = create_refresh_token(payload)
 
@@ -109,8 +108,7 @@ def reset_user_password(request: ResetPasswordRequest, db: Session = Depends(get
     """
     Reset password using reset token
     """
-    success, message = reset_password(
-        request.reset_token, request.new_password, db)
+    success, message = reset_password(request.reset_token, request.new_password, db)
 
     if not success:
         raise HTTPException(status_code=400, detail=message)
@@ -122,15 +120,13 @@ def reset_user_password(request: ResetPasswordRequest, db: Session = Depends(get
 def refresh_token(refresh_token: str):
 
     try:
-        payload = jwt.decode(refresh_token, settings.SECRET_KEY,
-                             algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid token type")
 
         new_access_token = create_access_token(
-            {"user_id": payload["user_id"], "username": payload["username"],
-                "instance": payload["instance"]}
+            {"user_id": payload["user_id"], "username": payload["username"], "instance": payload["instance"]}
         )
 
         return {"access_token": new_access_token}

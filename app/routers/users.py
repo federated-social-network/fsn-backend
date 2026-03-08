@@ -36,8 +36,7 @@ def search_users(q: str, user: User = Depends(get_current_user), db: Session = D
     # --- Local prefix search ---
     search_pattern = f"{q}%"
 
-    matching_users = db.query(User).filter(
-        User.username.ilike(search_pattern)).limit(10).all()
+    matching_users = db.query(User).filter(User.username.ilike(search_pattern)).limit(10).all()
 
     if not matching_users:
         return []
@@ -45,8 +44,7 @@ def search_users(q: str, user: User = Depends(get_current_user), db: Session = D
     # Get all connected local user IDs for current user (accepted)
     connected_ids = set()
     connections = (
-        db.query(Connection).filter(Connection.local_user_id ==
-                                    user.id, Connection.status == "accepted").all()
+        db.query(Connection).filter(Connection.local_user_id == user.id, Connection.status == "accepted").all()
     )
     for conn in connections:
         if conn.target_local_user_id:
@@ -67,8 +65,7 @@ def search_users(q: str, user: User = Depends(get_current_user), db: Session = D
     # Get pending connection target IDs
     pending_ids = set()
     pending_connections = (
-        db.query(Connection).filter(Connection.local_user_id ==
-                                    user.id, Connection.status == "pending").all()
+        db.query(Connection).filter(Connection.local_user_id == user.id, Connection.status == "pending").all()
     )
     for conn in pending_connections:
         if conn.target_local_user_id:
@@ -196,8 +193,7 @@ def get_user_profile(username: str, user: User = Depends(get_current_user), db: 
         raise HTTPException(status_code=404, detail="User not found")
 
     posts = (
-        db.query(Post).filter(Post.user_id == db_user.id,
-                              Post.is_remote == False).order_by(desc(Post.created_at)).all()
+        db.query(Post).filter(Post.user_id == db_user.id, Post.is_remote == False).order_by(desc(Post.created_at)).all()
     )
 
     return {
@@ -229,11 +225,9 @@ def random_users(user: User = Depends(get_current_user), db: Session = Depends(g
         Connection.target_local_user_id.isnot(None),
     )
 
-    connected_user_ids_incoming = db.query(Connection.local_user_id).filter(
-        Connection.target_local_user_id == user.id)
+    connected_user_ids_incoming = db.query(Connection.local_user_id).filter(Connection.target_local_user_id == user.id)
 
-    connected_user_ids = connected_user_ids_outgoing.union(
-        connected_user_ids_incoming).subquery()
+    connected_user_ids = connected_user_ids_outgoing.union(connected_user_ids_incoming).subquery()
 
     users = (
         db.query(User)
@@ -264,8 +258,7 @@ def connect_user(username: str, user: User = Depends(get_current_user), db: Sess
         raise HTTPException(status_code=404, detail="User not found")
 
     if target.id == user.id:
-        raise HTTPException(
-            status_code=400, detail="Cannot connect to yourself")
+        raise HTTPException(status_code=400, detail="Cannot connect to yourself")
 
     # Check if connection already exists in either direction
     existing = (
@@ -323,7 +316,6 @@ def connect_remote_user(
     Resolves via WebFinger, fetches actor profile, sends signed Follow.
     """
     import json
-    from urllib.parse import urlparse
 
     import httpx
 
@@ -363,8 +355,7 @@ def connect_remote_user(
             break
 
     if not actor_url:
-        raise HTTPException(
-            status_code=404, detail="Actor URL not found in WebFinger")
+        raise HTTPException(status_code=404, detail="Actor URL not found in WebFinger")
 
     # Step 2: Fetch actor profile for inbox URL
     try:
@@ -387,8 +378,7 @@ def connect_remote_user(
 
     remote_inbox = actor_data.get("inbox")
     if not remote_inbox:
-        raise HTTPException(
-            status_code=400, detail="Remote actor has no inbox")
+        raise HTTPException(status_code=400, detail="Remote actor has no inbox")
 
     # Step 3: Check for duplicate connection
     existing = (
@@ -400,8 +390,7 @@ def connect_remote_user(
         .first()
     )
     if existing:
-        raise HTTPException(
-            status_code=400, detail="Already following this user")
+        raise HTTPException(status_code=400, detail="Already following this user")
 
     # Step 4: Create connection
     connection = Connection(
@@ -459,8 +448,7 @@ def accept_connection(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    connection = db.query(Connection).filter(
-        Connection.id == connection_id, Connection.status == "pending").first()
+    connection = db.query(Connection).filter(Connection.id == connection_id, Connection.status == "pending").first()
 
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
@@ -549,8 +537,7 @@ def pending_connections(user: User = Depends(get_current_user), db: Session = De
                 # Local follow requests targeting me
                 Connection.target_local_user_id == user.id,
                 # Remote follow requests targeting me
-                ((Connection.local_user_id == user.id) &
-                 (Connection.remote_actor_url.isnot(None))),
+                ((Connection.local_user_id == user.id) & (Connection.remote_actor_url.isnot(None))),
             ),
         )
         .all()
@@ -573,8 +560,7 @@ def pending_connections(user: User = Depends(get_current_user), db: Session = De
             )
         elif conn.local_user_id:
             # Local follow request
-            requester = db.query(User).filter(
-                User.id == conn.local_user_id).first()
+            requester = db.query(User).filter(User.id == conn.local_user_id).first()
             if requester:
                 results.append(
                     {
@@ -620,8 +606,7 @@ def list_connections(user: User = Depends(get_current_user), db: Session = Depen
     for conn in connections:
         if conn.target_local_user_id:
             # Local connection — look up the user
-            target = db.query(User).filter(
-                User.id == conn.target_local_user_id).first()
+            target = db.query(User).filter(User.id == conn.target_local_user_id).first()
             if target:
                 results.append(
                     {
@@ -668,8 +653,7 @@ def remove_connection(username: str, user: User = Depends(get_current_user), db:
                 break
 
         if not conn_to_remove:
-            raise HTTPException(
-                status_code=400, detail="Not connected to this user")
+            raise HTTPException(status_code=400, detail="Not connected to this user")
 
         # Delete remote posts from this user (match by post ID prefix)
         actor_url = conn_to_remove.remote_actor_url
@@ -710,8 +694,7 @@ def remove_connection(username: str, user: User = Depends(get_current_user), db:
     )
 
     if not conn1 and not conn2:
-        raise HTTPException(
-            status_code=400, detail="Not connected to this user")
+        raise HTTPException(status_code=400, detail="Not connected to this user")
 
     if conn1:
         db.delete(conn1)
@@ -752,8 +735,7 @@ async def upload_avatar(
     filename = f"{uuid.uuid4()}.jpg"
 
     # Upload to Supabase
-    supabase.storage.from_("avatars").upload(
-        filename, contents, {"content-type": file.content_type})
+    supabase.storage.from_("avatars").upload(filename, contents, {"content-type": file.content_type})
 
     public_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/avatars/{filename}"
 
@@ -798,8 +780,7 @@ async def update_profile(
         filename = f"{uuid.uuid4()}.jpg"
 
         # Upload to Supabase
-        supabase.storage.from_("posts").upload(filename, contents, {
-            "content-type": image.content_type})
+        supabase.storage.from_("posts").upload(filename, contents, {"content-type": image.content_type})
 
         image_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/posts/{filename}"
         db_user.avatar_url = image_url

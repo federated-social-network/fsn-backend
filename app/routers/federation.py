@@ -12,7 +12,7 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import Activity, Connection, Post, User
-from app.services.crypto import sign_request, verify_http_signature
+from app.services.crypto import sign_request
 
 
 def _strip_html(html: str) -> str:
@@ -68,8 +68,7 @@ def webfinger(resource: str = Query(...), db: Session = Depends(get_db)):
     Mastodon queries: /.well-known/webfinger?resource=acct:alice@domain.com
     """
     if not resource.startswith("acct:"):
-        raise HTTPException(
-            status_code=400, detail="Resource must start with acct:")
+        raise HTTPException(status_code=400, detail="Resource must start with acct:")
 
     # Parse "acct:alice@domain.com"
     acct = resource[5:]  # remove "acct:"
@@ -253,8 +252,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                 image_url=image_url,
                 user_id=None,
                 author=author_display,
-                origin_instance=actor.split(
-                    "/users/")[0] if "/users/" in actor else actor,
+                origin_instance=actor.split("/users/")[0] if "/users/" in actor else actor,
                 is_remote=True,
                 visibility="public",
             )
@@ -265,8 +263,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
         target_id = obj.get("id") if isinstance(obj, dict) else obj
         if target_id:
             post = (
-                db.query(Post).filter(Post.is_remote == True).filter(
-                    Post.id.endswith(target_id.split("/")[-1])).first()
+                db.query(Post).filter(Post.is_remote == True).filter(Post.id.endswith(target_id.split("/")[-1])).first()
             )
             if post:
                 db.delete(post)
@@ -275,8 +272,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
     if activity_type == "Follow":
         target_actor_url = obj if isinstance(obj, str) else obj.get("id", "")
         target_username = target_actor_url.rstrip("/").split("/")[-1]
-        target_user = db.query(User).filter(
-            User.username == target_username).first()
+        target_user = db.query(User).filter(User.username == target_username).first()
 
         if target_user:
             # Check for duplicate
@@ -302,8 +298,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                     )
                     if resp.status_code == 200:
                         actor_data = resp.json()
-                        remote_inbox_url = actor_data.get(
-                            "inbox", remote_inbox_url)
+                        remote_inbox_url = actor_data.get("inbox", remote_inbox_url)
                 except Exception:
                     pass
 
@@ -344,8 +339,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
         target_actor_url = obj.get("object", "")
         if isinstance(target_actor_url, str):
             target_username = target_actor_url.rstrip("/").split("/")[-1]
-            target_user = db.query(User).filter(
-                User.username == target_username).first()
+            target_user = db.query(User).filter(User.username == target_username).first()
 
             if target_user:
                 conn = (
@@ -470,8 +464,7 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
                     image_url=image_url,
                     user_id=None,
                     author=author_display,
-                    origin_instance=actor_url.split(
-                        "/users/")[0] if "/users/" in actor_url else actor_url,
+                    origin_instance=actor_url.split("/users/")[0] if "/users/" in actor_url else actor_url,
                     is_remote=True,
                     visibility="public",
                 )
@@ -495,8 +488,7 @@ def debug_connections(
     db: Session = Depends(get_db),
 ):
     """Debug endpoint to view all connections and their statuses."""
-    connections = db.query(Connection).filter(
-        Connection.local_user_id == user.id).all()
+    connections = db.query(Connection).filter(Connection.local_user_id == user.id).all()
 
     return [
         {
@@ -688,8 +680,7 @@ def get_outbox(username: str, page: bool = False, db: Session = Depends(get_db))
     outbox_url = f"{actor_url}/outbox"
 
     # Count only local posts by this user
-    post_count = db.query(Post).filter(
-        Post.user_id == user.id, Post.is_remote == False).count()
+    post_count = db.query(Post).filter(Post.user_id == user.id, Post.is_remote == False).count()
 
     if not page:
         return JSONResponse(
@@ -767,8 +758,7 @@ def post_outbox(
     user: User = Depends(get_current_user),
 ):
     if user.username != username:
-        raise HTTPException(
-            status_code=403, detail="Cannot write to another actor's outbox")
+        raise HTTPException(status_code=403, detail="Cannot write to another actor's outbox")
 
     if activity.get("actor") != f"{settings.BASE_URL}/users/{username}":
         raise HTTPException(status_code=400, detail="Actor mismatch")

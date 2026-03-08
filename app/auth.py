@@ -115,8 +115,7 @@ def reset_password(reset_token: str, new_password: str, db) -> tuple[bool, str]:
     Returns (success, message)
     """
     try:
-        payload = jwt.decode(reset_token, settings.SECRET_KEY,
-                             algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(reset_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id = payload.get("user_id")
         purpose = payload.get("purpose")
 

@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import Base, engine
 from app.routers import auth, chat, federation, moderation, notifications, posts, users
 
 # Create Tables
@@ -10,8 +9,7 @@ app = FastAPI(title="Federated Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://heliix.live", "https://heliix.pages.dev",
-                   "http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["https://heliix.live", "https://heliix.pages.dev", "http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
