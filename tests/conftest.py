@@ -1,10 +1,11 @@
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.database import Base, engine, SessionLocal, get_db
-
 import app.models
+from app.database import Base, SessionLocal, engine, get_db
+from app.main import app
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -25,7 +26,6 @@ def db():
 
 @pytest.fixture()
 def client(db):
-
     def override_get_db():
         try:
             yield db
@@ -39,10 +39,10 @@ def client(db):
 
     app.dependency_overrides.clear()
 
+
 @pytest.fixture()
 def fake_user(db):
     from app.models import User
-    import uuid
 
     user = User(
         id=str(uuid.uuid4()),
