@@ -140,7 +140,8 @@ class Like(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (UniqueConstraint("user_id", "post_id", name="unique_user_post_like"),)
+    __table_args__ = (UniqueConstraint(
+        "user_id", "post_id", name="unique_user_post_like"),)
 
 
 class Comment(Base):
@@ -164,7 +165,8 @@ class Comment(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (UniqueConstraint("user_id", "post_id", "content", name="unique_comment"),)
+    __table_args__ = (UniqueConstraint("user_id", "post_id",
+                      "content", name="unique_comment"),)
 
 
 class Message(Base):
@@ -172,8 +174,10 @@ class Message(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
 
-    sender_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    receiver_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    sender_id = Column(String, ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
+    receiver_id = Column(String, ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
 
     content = Column(Text, nullable=False)
 
@@ -189,9 +193,11 @@ class Notification(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
 
-    recipient_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    recipient_id = Column(String, ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
 
-    actor_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    actor_id = Column(String, ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
 
     type = Column(String, nullable=False)
     # examples: follow_request, follow_accept, message

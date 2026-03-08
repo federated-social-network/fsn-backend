@@ -55,7 +55,8 @@ def _send_with_gmail_oauth(email: str, subject: str, html: str, text: str) -> bo
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
 
         # Send message
-        result = service.users().messages().send(userId="me", body={"raw": raw_message}).execute()
+        result = service.users().messages().send(
+            userId="me", body={"raw": raw_message}).execute()
 
         print(f"Email sent successfully. Message ID: {result.get('id')}")
         return True

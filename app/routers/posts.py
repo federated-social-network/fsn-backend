@@ -26,7 +26,8 @@ router = APIRouter()
 client = Groq(api_key=settings.GROQ_API_KEY)
 
 
-redis_client = redis.Redis(host="10.159.248.211", port=6379, decode_responses=True)
+redis_client = redis.Redis(host="10.159.248.211",
+                           port=6379, decode_responses=True)
 
 
 @router.post("/posts")
@@ -41,7 +42,8 @@ async def create_post(
         content = ""
 
     if not content.strip() and not image:
-        raise HTTPException(status_code=400, detail="Post must contain text or an image")
+        raise HTTPException(
+            status_code=400, detail="Post must contain text or an image")
 
     image_url = None
 
@@ -57,7 +59,8 @@ async def create_post(
         filename = f"{uuid.uuid4()}.jpg"
 
         # Upload to Supabase
-        supabase.storage.from_("posts").upload(filename, contents, {"content-type": image.content_type})
+        supabase.storage.from_("posts").upload(filename, contents, {
+            "content-type": image.content_type})
 
         image_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/posts/{filename}"
 
@@ -92,7 +95,8 @@ async def create_post(
         mentioned_usernames = set(re.findall(r"@([\w.-]+)", post.content))
         if mentioned_usernames:
             # Look up mentioned local users, excluding the author
-            mentioned_users = db.query(User).filter(User.username.in_(mentioned_usernames), User.id != user.id).all()
+            mentioned_users = db.query(User).filter(User.username.in_(
+                mentioned_usernames), User.id != user.id).all()
 
             for mentioned_user in mentioned_users:
                 notification = Notification(
@@ -197,7 +201,8 @@ def timeline(
 def timeline_connected_users(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
 
     connections = (
-        db.query(Connection).filter(Connection.local_user_id == user.id, Connection.status == "accepted").all()
+        db.query(Connection).filter(Connection.local_user_id ==
+                                    user.id, Connection.status == "accepted").all()
     )
 
     connected_local_user_ids = []
@@ -226,7 +231,8 @@ def timeline_connected_users(user: User = Depends(get_current_user), db: Session
     # REMOTE POSTS
     remote_results = []
     if connected_remote_actor_urls:
-        actor_conditions = [Post.id.like(f"{url}%") for url in connected_remote_actor_urls]
+        actor_conditions = [Post.id.like(f"{url}%")
+                            for url in connected_remote_actor_urls]
 
         remote_posts = (
             db.query(Post)
@@ -261,7 +267,8 @@ def timeline_connected_users(user: User = Depends(get_current_user), db: Session
             like_map[post_id].append(avatar)
 
     # check if current user liked
-    liked_posts = db.query(Like.post_id).filter(Like.post_id.in_(post_ids), Like.user_id == user.id).all()
+    liked_posts = db.query(Like.post_id).filter(
+        Like.post_id.in_(post_ids), Like.user_id == user.id).all()
 
     liked_set = {p[0] for p in liked_posts}
 
@@ -288,7 +295,8 @@ def timeline_connected_users(user: User = Depends(get_current_user), db: Session
 def debug_timeline_state(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Debug endpoint to see exactly what's in the DB for the following timeline."""
     connections = (
-        db.query(Connection).filter(Connection.local_user_id == user.id, Connection.status == "accepted").all()
+        db.query(Connection).filter(Connection.local_user_id ==
+                                    user.id, Connection.status == "accepted").all()
     )
 
     remote_connections = []
@@ -312,7 +320,8 @@ def debug_timeline_state(user: User = Depends(get_current_user), db: Session = D
                 }
             )
 
-    remote_posts = db.query(Post).filter(Post.is_remote == True).order_by(Post.created_at.desc()).limit(20).all()
+    remote_posts = db.query(Post).filter(Post.is_remote == True).order_by(
+        Post.created_at.desc()).limit(20).all()
 
     return {
         "accepted_remote_connections": remote_connections,
@@ -352,7 +361,8 @@ def delete_post(post_id: str, user: User = Depends(get_current_user), db: Sessio
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     if post.is_remote:
-        raise HTTPException(status_code=403, detail="Cannot delete remote post")
+        raise HTTPException(
+            status_code=403, detail="Cannot delete remote post")
     if post.user_id != user.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
@@ -377,7 +387,8 @@ def like_post(post_id: str, user: User = Depends(get_current_user), db: Session 
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    existing = db.query(Like).filter(Like.user_id == user.id, Like.post_id == post_id).first()
+    existing = db.query(Like).filter(
+        Like.user_id == user.id, Like.post_id == post_id).first()
 
     if existing:
         raise HTTPException(status_code=400, detail="Already liked")
@@ -388,7 +399,8 @@ def like_post(post_id: str, user: User = Depends(get_current_user), db: Session 
     post.like_count += 1
 
     if post.user_id != user.id:
-        notification = Notification(recipient_id=post.user_id, actor_id=user.id, type="like", object_id=post.id)
+        notification = Notification(
+            recipient_id=post.user_id, actor_id=user.id, type="like", object_id=post.id)
         db.add(notification)
 
     db.commit()
@@ -398,7 +410,8 @@ def like_post(post_id: str, user: User = Depends(get_current_user), db: Session 
 
 @router.delete("/posts/{post_id}/like")
 def unlike_post(post_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    like = db.query(Like).filter(Like.user_id == user.id, Like.post_id == post_id).first()
+    like = db.query(Like).filter(Like.user_id == user.id,
+                                 Like.post_id == post_id).first()
 
     if not like:
         raise HTTPException(status_code=404, detail="Like not found")
@@ -614,7 +627,8 @@ def delete_comment(
 
     # allow only the comment author
     if comment.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this comment")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to delete this comment")
 
     post = db.query(Post).filter(Post.id == comment.post_id).first()
 

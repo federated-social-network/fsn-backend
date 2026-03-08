@@ -12,7 +12,8 @@ def test_comment_post(client):
     print(post_id)
 
     # # Now, like the post
-    comment_response = client.post(f"/{post_id}/comments", json={"content": "This is a test comment."})
+    comment_response = client.post(
+        f"/{post_id}/comments", json={"content": "This is a test comment."})
     assert comment_response.status_code == 200
 
 
@@ -29,7 +30,8 @@ def test_get_comments(client):
     post_id = response.json().get("id")
 
     # Add a comment to the post
-    client.post(f"/{post_id}/comments", json={"content": "This is a test comment."})
+    client.post(f"/{post_id}/comments",
+                json={"content": "This is a test comment."})
 
     # Now, get the comments for the post
     get_comments_response = client.get(f"/{post_id}/comments")
@@ -49,7 +51,8 @@ def test_delete_comment(client):
     post_id = response.json().get("id")
 
     # Add a comment to the post
-    comment_response = client.post(f"/{post_id}/comments", json={"content": "This is a test comment to delete."})
+    comment_response = client.post(
+        f"/{post_id}/comments", json={"content": "This is a test comment to delete."})
     assert comment_response.status_code == 200
     comment_id = comment_response.json().get("id")
 
