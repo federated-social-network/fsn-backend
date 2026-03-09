@@ -27,7 +27,7 @@ class User(Base):
     id = Column(String, primary_key=True)
     username = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    email = Column(String, nullable=True)
+    email = Column(String, unique=True, nullable=True)
     avatar_url = Column(String, nullable=True)
     public_key = Column(Text, nullable=True)
     private_key = Column(Text, nullable=True)
