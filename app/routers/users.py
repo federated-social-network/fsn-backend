@@ -515,7 +515,10 @@ def accept_connection(
                 pass  # Best-effort delivery
 
     notification = Notification(
-        recipient_id=connection.local_user_id, actor_id=user.id, type="follow_accept", object_id=connection.id
+        recipient_id=connection.local_user_id,
+        actor_id=user.id,
+        type="follow_accept",
+        object_id=connection.id,
     )
 
     db.add(notification)

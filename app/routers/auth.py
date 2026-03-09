@@ -42,7 +42,8 @@ def register(username: str, password: str, email: str, db: Session = Depends(get
     username = username.strip()
     if not re.match(r"^[a-zA-Z0-9_-]+$", username):
         raise HTTPException(
-            status_code=400, detail="Username can only contain alphanumeric characters, dashes (-), and underscores (_)"
+            status_code=400,
+            detail="Username can only contain alphanumeric characters, dashes (-), and underscores (_)",
         )
     try:
         private_key, public_key = generate_rsa_keypair()
@@ -70,7 +71,11 @@ def login(username: str, password: str, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid Credentials")
 
-    payload = {"user_id": user.id, "username": user.username, "instance": settings.INSTANCE_NAME}
+    payload = {
+        "user_id": user.id,
+        "username": user.username,
+        "instance": settings.INSTANCE_NAME,
+    }
     access_token = create_access_token(payload)
     refresh_token = create_refresh_token(payload)
 
@@ -126,7 +131,11 @@ def refresh_token(refresh_token: str):
             raise HTTPException(status_code=401, detail="Invalid token type")
 
         new_access_token = create_access_token(
-            {"user_id": payload["user_id"], "username": payload["username"], "instance": payload["instance"]}
+            {
+                "user_id": payload["user_id"],
+                "username": payload["username"],
+                "instance": payload["instance"],
+            }
         )
 
         return {"access_token": new_access_token}

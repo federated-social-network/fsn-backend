@@ -1,9 +1,10 @@
 """add comments table and comment count to posts"""
 
 from typing import Sequence, Union
-from alembic import op
+
 import sqlalchemy as sa
 
+from alembic import op
 
 revision: str = "de6d262a97d1"
 down_revision: Union[str, Sequence[str], None] = None
@@ -20,7 +21,6 @@ def upgrade():
         sa.Column("user_id", sa.String(), nullable=False),
         sa.Column("post_id", sa.String(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=True),
-
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["post_id"], ["posts.id"], ondelete="CASCADE"),
     )

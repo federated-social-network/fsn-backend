@@ -96,7 +96,10 @@ async def create_post(
 
             for mentioned_user in mentioned_users:
                 notification = Notification(
-                    recipient_id=mentioned_user.id, actor_id=user.id, type="mention", object_id=post.id
+                    recipient_id=mentioned_user.id,
+                    actor_id=user.id,
+                    type="mention",
+                    object_id=post.id,
                 )
                 db.add(notification)
 
@@ -558,7 +561,10 @@ async def create_comment(
 
     if post.user_id != current_user.id:
         notification = Notification(
-            recipient_id=post.user_id, actor_id=current_user.id, type="comment", object_id=post.id
+            recipient_id=post.user_id,
+            actor_id=current_user.id,
+            type="comment",
+            object_id=post.id,
         )
         db.add(notification)
 

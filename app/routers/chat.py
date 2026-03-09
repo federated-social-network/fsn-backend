@@ -27,7 +27,9 @@ async def chat_socket(websocket: WebSocket, user_id: str):
                         unread_msgs = (
                             db.query(Message)
                             .filter(
-                                Message.sender_id == sender_id, Message.receiver_id == user_id, Message.is_read == False
+                                Message.sender_id == sender_id,
+                                Message.receiver_id == user_id,
+                                Message.is_read == False,
                             )
                             .all()
                         )
@@ -38,7 +40,8 @@ async def chat_socket(websocket: WebSocket, user_id: str):
                             db.commit()
 
                             await manager.send_personal_message(
-                                sender_id, {"type": "read_receipt", "reader_id": user_id}
+                                sender_id,
+                                {"type": "read_receipt", "reader_id": user_id},
                             )
 
             elif msg_type == "chat":
@@ -88,7 +91,11 @@ async def chat_socket(websocket: WebSocket, user_id: str):
 
                     if not success and msg_type == "webrtc_offer":
                         await manager.send_personal_message(
-                            user_id, {"type": "webrtc_error", "message": "User is currently offline."}
+                            user_id,
+                            {
+                                "type": "webrtc_error",
+                                "message": "User is currently offline.",
+                            },
                         )
 
     except Exception as e:
@@ -131,7 +138,10 @@ def get_conversations(db: Session = Depends(get_db), current_user: User = Depend
 
     subq = (
         db.query(
-            case((Message.sender_id == user_id, Message.receiver_id), else_=Message.sender_id).label("other_user"),
+            case(
+                (Message.sender_id == user_id, Message.receiver_id),
+                else_=Message.sender_id,
+            ).label("other_user"),
             func.max(Message.created_at).label("latest_time"),
         )
         .filter(or_(Message.sender_id == user_id, Message.receiver_id == user_id))
@@ -140,7 +150,13 @@ def get_conversations(db: Session = Depends(get_db), current_user: User = Depend
     )
 
     results = (
-        db.query(subq.c.other_user, User.username, User.avatar_url, Message.content, Message.created_at)
+        db.query(
+            subq.c.other_user,
+            User.username,
+            User.avatar_url,
+            Message.content,
+            Message.created_at,
+        )
         .join(User, User.id == subq.c.other_user)
         .join(Message, (Message.created_at == subq.c.latest_time))
         .order_by(Message.created_at.desc())

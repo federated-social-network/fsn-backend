@@ -252,7 +252,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
                 image_url=image_url,
                 user_id=None,
                 author=author_display,
-                origin_instance=actor.split("/users/")[0] if "/users/" in actor else actor,
+                origin_instance=(actor.split("/users/")[0] if "/users/" in actor else actor),
                 is_remote=True,
                 visibility="public",
             )
@@ -464,7 +464,7 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
                     image_url=image_url,
                     user_id=None,
                     author=author_display,
-                    origin_instance=actor_url.split("/users/")[0] if "/users/" in actor_url else actor_url,
+                    origin_instance=(actor_url.split("/users/")[0] if "/users/" in actor_url else actor_url),
                     is_remote=True,
                     visibility="public",
                 )
