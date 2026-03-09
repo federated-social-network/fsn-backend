@@ -3,18 +3,19 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import settings
 
+# Engine
 engine = create_engine(
     settings.DATABASE_URL,
-    connect_args={"sslmode": "require", "options": "-c statement_timeout=5000"},
-    pool_size=20,
-    max_overflow=40,
-    pool_timeout=30,
-    pool_recycle=1800,
+    connect_args=(
+        {"sslmode": "require", "options": "-c statement_timeout=5000"} if "postgresql" in settings.DATABASE_URL else {}
+    ),
     pool_pre_ping=True,
 )
 
+# Session
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-SessionLocal = sessionmaker(bind=engine)
+# Base for models
 Base = declarative_base()
 
 
