@@ -138,7 +138,7 @@ def timeline(
 
     results = (
         db.query(Post, User, Like.post_id)
-        .join(User, Post.user_id == User.id)
+        .outerjoin(User, Post.user_id == User.id)
         .outerjoin(
             Like,
             and_(
@@ -180,14 +180,15 @@ def timeline(
             "id": post.id,
             "content": post.content,
             "created_at": post.created_at.isoformat(),
-            "author": user.username,
+            "author": user.username if user else post.author,
             "image_url": post.image_url,
-            "avatar_url": user.avatar_url,
-            "display_name": user.display_name,
+            "avatar_url": user.avatar_url if user else None,
+            "display_name": user.display_name if user else (post.author if post.is_remote else "Unknown"),
             "like_count": post.like_count,
             "is_liked": liked_post_id is not None,
             "liked_by": like_map.get(post.id, []),
             "comment_count": post.comment_count,
+            "is_remote": post.is_remote,
         }
         for post, user, liked_post_id in results
     ]

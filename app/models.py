@@ -53,7 +53,7 @@ class Post(Base):
     user_id = Column(
         String,
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
 
     origin_instance = Column(String, nullable=False)
