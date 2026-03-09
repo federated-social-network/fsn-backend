@@ -6,9 +6,7 @@ from app.config import settings
 # Engine
 engine = create_engine(
     settings.DATABASE_URL,
-    connect_args=(
-        {"sslmode": "require", "options": "-c statement_timeout=5000"} if "postgresql" in settings.DATABASE_URL else {}
-    ),
+    connect_args={"sslmode": "require", "options": "-c search_path=public -c statement_timeout=5000"},
     pool_pre_ping=True,
 )
 
