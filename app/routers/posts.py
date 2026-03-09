@@ -8,7 +8,7 @@ import redis
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from groq import Groq
 from PIL import Image
-from sqlalchemy import and_, desc, func, or_
+from sqlalchemy import and_, desc, or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -135,7 +135,6 @@ def timeline(
         )
         .exists()
     )
-
 
     results = (
         db.query(Post, User, Like.post_id)
