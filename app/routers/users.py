@@ -571,6 +571,7 @@ def pending_connections(user: User = Depends(get_current_user), db: Session = De
                         "from_user_id": requester.id,
                         "from_username": requester.username,
                         "is_remote": False,
+                        "avatar_url": requester.avatar_url,
                     }
                 )
 
