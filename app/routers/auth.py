@@ -45,6 +45,9 @@ def register(username: str, password: str, email: str, db: Session = Depends(get
             status_code=400,
             detail="Username can only contain alphanumeric characters, dashes (-), and underscores (_)",
         )
+    existing_email = db.query(User).filter(User.email == email).first()
+    if existing_email:
+        raise HTTPException(status_code=409, detail="email already exists")
     try:
         private_key, public_key = generate_rsa_keypair()
         user = User(
