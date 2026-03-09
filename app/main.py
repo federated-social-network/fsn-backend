@@ -5,8 +5,13 @@ from app.database import Base, engine
 from app.routers import auth, chat, federation, moderation, notifications, posts, users
 
 # Create Tables
-Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Federated Backend")
+
+
+@app.on_event("startup")
+def startup():
+    Base.metadata.create_all(bind=engine)
+
 
 app.add_middleware(
     CORSMiddleware,
