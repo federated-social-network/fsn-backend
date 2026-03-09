@@ -3,17 +3,27 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import settings
 
-# Engine
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args={"sslmode": "require", "options": "-c search_path=public -c statement_timeout=5000"},
-    pool_pre_ping=True,
-)
+DATABASE_URL = settings.DATABASE_URL
 
-# Session
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+    )
 
-# Base for models
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={
+            "sslmode": "require",
+            "options": "-c search_path=public -c statement_timeout=5000",
+        },
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,
+    )
+
+SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
 
