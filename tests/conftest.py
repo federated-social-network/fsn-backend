@@ -1,14 +1,18 @@
+import os
 import uuid
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import event
-from sqlalchemy.orm import Session
+# Force tests to use a local SQLite database instead of production
+os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 
-from app.database import Base, SessionLocal, engine, get_db
-from app.main import app
-from app.models import User
-from app.routers.users import get_current_user
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import event  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+
+from app.database import Base, SessionLocal, engine, get_db  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models import User  # noqa: E402
+from app.routers.users import get_current_user  # noqa: E402
 
 
 # Create schema once for the whole test session
@@ -16,6 +20,7 @@ from app.routers.users import get_current_user
 def setup_database():
     Base.metadata.create_all(bind=engine)
     yield
+    # Clean up test database file after tests
     Base.metadata.drop_all(bind=engine)
 
 
