@@ -1,4 +1,5 @@
 from jose import jwt
+
 from app.config import settings
 
 
@@ -34,7 +35,6 @@ def test_refresh_token_success(client, fake_user):
     )
 
     assert payload["username"] == fake_user.username
-
 
 
 def test_refresh_token_expired(client, fake_user):
