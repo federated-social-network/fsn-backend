@@ -148,11 +148,12 @@ def timeline(
             ),
         )
         .filter(
+            Post.is_remote == False,
             or_(
                 Post.visibility == "public",
                 and_(Post.visibility == "followers", connection_exists),
                 Post.user_id == current_user.id,
-            )
+            ),
         )
         .order_by(Post.created_at.desc())
         .all()
