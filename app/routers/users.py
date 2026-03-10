@@ -245,6 +245,7 @@ def random_users(user: User = Depends(get_current_user), db: Session = Depends(g
             "id": u.id,
             "username": u.username,
             "email": u.email,
+            "display_name": u.display_name,
             "avatar_url": u.avatar_url,
         }
         for u in users
