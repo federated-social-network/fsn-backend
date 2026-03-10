@@ -30,6 +30,11 @@ Users on one Heliix instance can follow and interact with users on *any* Activit
 
 This repository contains the **Heliix backend** — a RESTful API server built with **FastAPI** (Python 3.11+), backed by **PostgreSQL** via **SQLAlchemy ORM** with **Alembic** for database migrations. It exposes a comprehensive set of REST API endpoints for authentication, posts, user management, real-time chat (WebSockets), WebRTC call signaling, notifications, and ActivityPub federation. Media storage (avatars, post images) is handled through **Supabase Storage**, AI-powered features use the **Groq API**, and content moderation leverages **Google Cloud Vision**. The server is containerized with **Docker** and deployed on **Google Cloud Run**.
 
+For more detailed technical documentation, please refer to:
+- 📡 [API Reference](docs/API.md)
+- 🗄️ [Database Schema](docs/DATABASE_SCHEMA.md)
+
+
 ### ✨ Key Highlights
 
 | Feature | Description |
@@ -348,7 +353,9 @@ Heliix implements the **ActivityPub** protocol (W3C standard), enabling interope
 |---|---|
 | 🌐 **Frontend** | [heliix.live](https://heliix.live) |
 | ⚡ **Backend API** | [heliix.studio](https://heliix.studio) |
-| 📖 **API Docs** | [heliix.studio/docs](https://heliix.studio/docs) |
+| 📖 **External API Docs** | [heliix.studio/docs](https://heliix.studio/docs) |
+| 📡 **Local API Docs** | [docs/API.md](docs/API.md) |
+| 🗄️ **Database Schema** | [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) |
 | 🐙 **GitHub** | [github.com/federated-social-platform](https://github.com/federated-social-platform) |
 
 ---
