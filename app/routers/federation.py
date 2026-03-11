@@ -228,35 +228,52 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
     )
     db.add(new_activity)
 
-    # Handle Create (Note)
-    if activity_type == "Create" and isinstance(obj, dict) and obj.get("type") == "Note":
-        post_id = obj.get("id")
-        content = _strip_html(obj.get("content", ""))
-        image_url = obj.get("image_url")
+    # Handle Create
+    if activity_type == "Create" and obj is not None:
+        # Sometimes the object is a URL string instead of an inline dict (custom ActivityPub servers)
+        if isinstance(obj, str) and obj.startswith("http"):
+            try:
+                resp = httpx.get(
+                    obj, headers={"Accept": "application/activity+json"}, timeout=5
+                )
+                if resp.status_code == 200:
+                    obj = resp.json()
+            except Exception:
+                pass
 
-        # Check for image in attachment array (Mastodon format)
-        if not image_url and obj.get("attachment"):
-            for att in obj["attachment"]:
-                if att.get("type") in ("Image", "Document"):
-                    image_url = att.get("url")
-                    break
+        if isinstance(obj, dict) and obj.get("type") in ("Note", "Article", "Page"):
+            post_id = obj.get("id")
+            
+            # Fallback for content
+            raw_content = obj.get("content") or obj.get("summary") or obj.get("name") or ""
+            content = _strip_html(raw_content)
+            
+            image_url = obj.get("image_url")
 
-        # Resolve friendly author name (preferredUsername@domain)
-        author_display = _resolve_actor_display_name(actor)
+            # Check for image in attachment array (Mastodon format)
+            if not image_url and obj.get("attachment"):
+                for att in obj["attachment"]:
+                    if att.get("type") in ("Image", "Document"):
+                        image_url = att.get("url")
+                        break
 
-        existing = db.query(Post).filter(Post.id == post_id).first()
-        if not existing:
-            post = Post(
-                id=post_id,
-                content=content,
-                image_url=image_url,
-                user_id=None,
-                author=author_display,
-                origin_instance=(actor.split("/users/")[0] if "/users/" in actor else actor),
-                is_remote=True,
-                visibility="public",
-            )
-            db.add(post)
+            # Resolve friendly author name (preferredUsername@domain)
+            author_display = _resolve_actor_display_name(actor)
+
+            if post_id and content:
+                existing = db.query(Post).filter(Post.id == post_id).first()
+                if not existing:
+                    post = Post(
+                        id=post_id,
+                        content=content,
+                        image_url=image_url,
+                        user_id=None,
+                        author=author_display,
+                        origin_instance=(actor.split("/users/")[0] if "/users/" in actor else actor),
+                        is_remote=True,
+                        visibility="public",
+                    )
+                    db.add(post)
 
     # Handle Delete
     if activity_type == "Delete":
@@ -436,16 +453,25 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
                 # Handle both wrapped (Create) and unwrapped (Note) activities
                 if item_type == "Create":
                     note = activity_obj.get("object", {})
-                elif item_type == "Note":
+                elif item_type in ("Note", "Article", "Page"):
                     note = activity_obj
                 else:
                     continue
 
-                if not isinstance(note, dict) or note.get("type") != "Note":
+                if isinstance(note, str) and note.startswith("http"):
+                    try:
+                        resp = httpx.get(note, headers={"Accept": "application/activity+json"}, timeout=5)
+                        if resp.status_code == 200:
+                            note = resp.json()
+                    except Exception:
+                        pass
+
+                if not isinstance(note, dict) or note.get("type") not in ("Note", "Article", "Page"):
                     continue
 
                 post_id = note.get("id")
-                content = _strip_html(note.get("content", ""))
+                raw_content = note.get("content") or note.get("summary") or note.get("name") or ""
+                content = _strip_html(raw_content)
 
                 if not post_id or not content:
                     continue
@@ -456,11 +482,12 @@ def _fetch_remote_outbox_posts(actor_url: str, db: Session):
                     continue
 
                 # Extract image from attachments
-                image_url = None
-                for att in note.get("attachment", []):
-                    if att.get("type") in ("Image", "Document"):
-                        image_url = att.get("url")
-                        break
+                image_url = note.get("image_url")
+                if not image_url:
+                    for att in note.get("attachment", []):
+                        if att.get("type") in ("Image", "Document"):
+                            image_url = att.get("url")
+                            break
 
                 post = Post(
                     id=post_id,
@@ -532,11 +559,15 @@ def sync_remote_posts(
 
     synced = 0
     for conn in connections:
+        parsed = urlparse(conn.remote_actor_url)
+        path_name = conn.remote_actor_url.rstrip("/").split("/")[-1]
+        friendly = f"{path_name}@{parsed.hostname}"
+
         before_count = (
             db.query(Post)
             .filter(
                 Post.is_remote == True,
-                Post.author == conn.remote_actor_url,
+                (Post.author == friendly) | Post.id.like(f"{conn.remote_actor_url}%")
             )
             .count()
         )
@@ -547,7 +578,7 @@ def sync_remote_posts(
             db.query(Post)
             .filter(
                 Post.is_remote == True,
-                Post.author == conn.remote_actor_url,
+                (Post.author == friendly) | Post.id.like(f"{conn.remote_actor_url}%")
             )
             .count()
         )

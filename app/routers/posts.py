@@ -231,7 +231,13 @@ def timeline_connected_users(user: User = Depends(get_current_user), db: Session
     # REMOTE POSTS
     remote_results = []
     if connected_remote_actor_urls:
-        actor_conditions = [Post.id.like(f"{url}%") for url in connected_remote_actor_urls]
+        actor_conditions = []
+        for url in connected_remote_actor_urls:
+            actor_conditions.append(Post.id.like(f"{url}%"))
+            parsed = urlparse(url)
+            path_name = url.rstrip("/").split("/")[-1]
+            friendly = f"{path_name}@{parsed.hostname}"
+            actor_conditions.append(Post.author == friendly)
 
         remote_posts = (
             db.query(Post)
