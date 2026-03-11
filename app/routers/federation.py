@@ -262,9 +262,13 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
     if activity_type == "Delete":
         target_id = obj.get("id") if isinstance(obj, dict) else obj
         if target_id:
-            post = (
-                db.query(Post).filter(Post.is_remote == True).filter(Post.id.endswith(target_id.split("/")[-1])).first()
-            )
+            with db.no_autoflush:
+                post = (
+                    db.query(Post)
+                    .filter(Post.is_remote == True)
+                    .filter(Post.id.endswith(target_id.split("/")[-1]))
+                    .first()
+                )
             if post:
                 db.delete(post)
 
