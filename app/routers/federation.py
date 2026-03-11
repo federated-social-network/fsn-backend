@@ -233,9 +233,7 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
         # Sometimes the object is a URL string instead of an inline dict (custom ActivityPub servers)
         if isinstance(obj, str) and obj.startswith("http"):
             try:
-                resp = httpx.get(
-                    obj, headers={"Accept": "application/activity+json"}, timeout=5
-                )
+                resp = httpx.get(obj, headers={"Accept": "application/activity+json"}, timeout=5)
                 if resp.status_code == 200:
                     obj = resp.json()
             except Exception:
@@ -243,11 +241,11 @@ def _process_inbox_activity(activity: dict, db: Session) -> dict:
 
         if isinstance(obj, dict) and obj.get("type") in ("Note", "Article", "Page"):
             post_id = obj.get("id")
-            
+
             # Fallback for content
             raw_content = obj.get("content") or obj.get("summary") or obj.get("name") or ""
             content = _strip_html(raw_content)
-            
+
             image_url = obj.get("image_url")
 
             # Check for image in attachment array (Mastodon format)
@@ -565,10 +563,7 @@ def sync_remote_posts(
 
         before_count = (
             db.query(Post)
-            .filter(
-                Post.is_remote == True,
-                (Post.author == friendly) | Post.id.like(f"{conn.remote_actor_url}%")
-            )
+            .filter(Post.is_remote == True, (Post.author == friendly) | Post.id.like(f"{conn.remote_actor_url}%"))
             .count()
         )
 
@@ -576,10 +571,7 @@ def sync_remote_posts(
 
         after_count = (
             db.query(Post)
-            .filter(
-                Post.is_remote == True,
-                (Post.author == friendly) | Post.id.like(f"{conn.remote_actor_url}%")
-            )
+            .filter(Post.is_remote == True, (Post.author == friendly) | Post.id.like(f"{conn.remote_actor_url}%"))
             .count()
         )
 

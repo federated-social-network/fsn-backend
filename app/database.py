@@ -19,7 +19,7 @@ else:
             "sslmode": "require",
             "options": "-c search_path=public -c statement_timeout=5000",
         },
-        poolclass=NullPool,  # Fresh connection per request — best for Cloud Run + Supabase
+        poolclass=NullPool,
     )
 
 SessionLocal = sessionmaker(bind=engine)

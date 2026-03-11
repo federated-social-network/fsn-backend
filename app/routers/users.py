@@ -1,5 +1,6 @@
 import uuid
 from io import BytesIO
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from PIL import Image
@@ -662,11 +663,11 @@ def remove_connection(username: str, user: User = Depends(get_current_user), db:
 
         # Delete remote posts from this user (match by post ID prefix or author)
         actor_url = conn_to_remove.remote_actor_url
-        
+
         parsed = urlparse(actor_url)
         path_name = actor_url.rstrip("/").split("/")[-1]
         friendly = f"{path_name}@{parsed.hostname}"
-        
+
         db.query(Post).filter(
             Post.is_remote == True,
             or_(
