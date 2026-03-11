@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
@@ -18,10 +19,7 @@ else:
             "sslmode": "require",
             "options": "-c search_path=public -c statement_timeout=5000",
         },
-        pool_size=5,
-        max_overflow=10,
-        pool_pre_ping=True,
-        pool_recycle=300,  # Recycle connections every 5 min to avoid Supabase idle drops
+        poolclass=NullPool,  # Fresh connection per request — best for Cloud Run + Supabase
     )
 
 SessionLocal = sessionmaker(bind=engine)
