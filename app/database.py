@@ -21,6 +21,7 @@ else:
         pool_size=5,
         max_overflow=10,
         pool_pre_ping=True,
+        pool_recycle=300,  # Recycle connections every 5 min to avoid Supabase idle drops
     )
 
 SessionLocal = sessionmaker(bind=engine)
