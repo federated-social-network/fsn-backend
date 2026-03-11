@@ -6,6 +6,7 @@ from app.database import SessionLocal, get_db
 from app.dependencies import get_current_user
 from app.models import Message, User
 from app.services.connection_manager import manager
+from app.services.crypto import decrypt_message, encrypt_message
 
 router = APIRouter()
 
@@ -48,15 +49,18 @@ async def chat_socket(websocket: WebSocket, user_id: str):
                 receiver_id = data["receiver_id"]
                 content = data["content"]
 
+                # Encrypt before storing in database
+                encrypted_content = encrypt_message(content)
+
                 # Save to database using a fresh session
                 with SessionLocal() as db:
-                    msg = Message(sender_id=user_id, receiver_id=receiver_id, content=content)
+                    msg = Message(sender_id=user_id, receiver_id=receiver_id, content=encrypted_content)
                     db.add(msg)
                     db.commit()
                     msg_id = msg.id
                     created_at = msg.created_at.isoformat()
 
-                # Broadcast real-time message
+                # Broadcast real-time (plaintext) message to receiver
                 await manager.send_personal_message(
                     receiver_id,
                     {
@@ -123,7 +127,7 @@ def get_messages(user1: str, user2: str, db: Session = Depends(get_db)):
             "id": msg.id,
             "sender_id": msg.sender_id,
             "receiver_id": msg.receiver_id,
-            "content": msg.content,
+            "content": decrypt_message(msg.content),
             "is_read": msg.is_read,
             "created_at": msg.created_at,
         }
@@ -168,7 +172,7 @@ def get_conversations(db: Session = Depends(get_db), current_user: User = Depend
             "other_user": r.other_user,
             "username": r.username,
             "avatar_url": r.avatar_url,
-            "content": r.content,
+            "content": decrypt_message(r.content),
             "created_at": r.created_at,
         }
         for r in results

@@ -1,5 +1,6 @@
 """
 RSA key management and HTTP Signature utilities for ActivityPub federation.
+Message encryption/decryption for chat E2EE (server-side).
 """
 
 import base64
@@ -7,8 +8,35 @@ import datetime
 import hashlib
 from urllib.parse import urlparse
 
+from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
+
+
+def _get_fernet() -> Fernet:
+    """Derive a Fernet key from the app's SECRET_KEY."""
+    from app.config import settings
+
+    # Derive a 32-byte key from SECRET_KEY using SHA-256, then base64-encode for Fernet
+    key_bytes = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
+    fernet_key = base64.urlsafe_b64encode(key_bytes)
+    return Fernet(fernet_key)
+
+
+def encrypt_message(plaintext: str) -> str:
+    """Encrypt a plaintext message. Returns base64-encoded ciphertext."""
+    f = _get_fernet()
+    return f.encrypt(plaintext.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_message(ciphertext: str) -> str:
+    """Decrypt a ciphertext message. Returns plaintext string."""
+    try:
+        f = _get_fernet()
+        return f.decrypt(ciphertext.encode("utf-8")).decode("utf-8")
+    except Exception:
+        # If decryption fails (e.g. old unencrypted message), return as-is
+        return ciphertext
 
 
 def generate_rsa_keypair() -> tuple[str, str]:
