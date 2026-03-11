@@ -63,6 +63,7 @@ def register(username: str, password: str, email: str, db: Session = Depends(get
         db.refresh(user)
         return {"message": "user created"}
     except IntegrityError:
+
         db.rollback()
         raise HTTPException(status_code=409, detail="username already exists")
 
