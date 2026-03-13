@@ -197,6 +197,35 @@ def get_user_profile(username: str, user: User = Depends(get_current_user), db: 
         db.query(Post).filter(Post.user_id == db_user.id, Post.is_remote == False).order_by(desc(Post.created_at)).all()
     )
 
+    # Determine connection status between current user and this profile
+    if db_user.id == user.id:
+        connection_status = "self"
+    else:
+        # Check outgoing: current user -> profile user
+        outgoing = (
+            db.query(Connection)
+            .filter(
+                Connection.local_user_id == user.id,
+                Connection.target_local_user_id == db_user.id,
+            )
+            .first()
+        )
+        # Check incoming: profile user -> current user
+        incoming = (
+            db.query(Connection)
+            .filter(
+                Connection.local_user_id == db_user.id,
+                Connection.target_local_user_id == user.id,
+            )
+            .first()
+        )
+        if (outgoing and outgoing.status == "accepted") or (incoming and incoming.status == "accepted"):
+            connection_status = "accepted"
+        elif outgoing and outgoing.status == "pending":
+            connection_status = "pending"
+        else:
+            connection_status = "none"
+
     return {
         "id": db_user.id,
         "username": db_user.username,
@@ -215,6 +244,7 @@ def get_user_profile(username: str, user: User = Depends(get_current_user), db: 
         "profile_url": db_user.avatar_url,
         "bio": db_user.bio,
         "display_name": db_user.display_name,
+        "connection_status": connection_status,
     }
 
 

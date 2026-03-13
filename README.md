@@ -236,51 +236,6 @@ The API docs are available at `http://localhost:8000/docs` (Swagger UI).
 
 ---
 
-## 📁 Project Structure
-
-```
-fsn-backend/
-├── app/
-│   ├── routers/                  # API route handlers
-│   │   ├── auth.py               #   Authentication & password reset
-│   │   ├── posts.py              #   Posts, likes, comments, AI features
-│   │   ├── users.py              #   Profiles, connections, search, avatars
-│   │   ├── chat.py               #   WebSocket chat & WebRTC signaling
-│   │   ├── federation.py         #   ActivityPub protocol endpoints
-│   │   ├── notifications.py      #   In-app notifications
-│   │   └── moderation.py         #   Image safety analysis
-│   ├── services/
-│   │   ├── federation.py         #   Activity building & delivery
-│   │   ├── crypto.py             #   HTTP signature signing (RSA)
-│   │   ├── connection_manager.py #   WebSocket connection manager
-│   │   └── supabase_client.py    #   Supabase storage client
-│   ├── main.py                   # FastAPI app entry point
-│   ├── models.py                 # SQLAlchemy ORM models
-│   ├── database.py               # Database engine & session
-│   ├── config.py                 # Environment settings (Pydantic)
-│   ├── dependencies.py           # Auth dependency injection
-│   ├── auth.py                   # JWT token utilities
-│   └── email_service.py          # Gmail OAuth2 / SMTP email service
-├── alembic/                      # Database migrations
-├── tests/                        # Pytest test suite
-│   ├── auth/                     #   Auth endpoint tests
-│   ├── posts/                    #   Post endpoint tests
-│   ├── users/                    #   User endpoint tests
-│   ├── chat/                     #   Chat endpoint tests
-│   └── notifications/            #   Notification tests
-├── resources/
-│   └── architecture_diagram.png  # System architecture diagram
-├── Dockerfile                    # Container build
-├── Makefile                      # Development commands (Linux/macOS)
-├── run.ps1                       # Development commands (Windows)
-├── requirements.txt              # Python dependencies
-├── pyproject.toml                # Tool configuration (black, isort, pytest)
-├── alembic.ini                   # Alembic configuration
-└── LICENSE                       # MIT License
-```
-
----
-
 ## 🧪 Testing
 
 ```bash
