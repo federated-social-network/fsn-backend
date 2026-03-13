@@ -1,10 +1,8 @@
-import json
 import re
 import uuid
 from io import BytesIO
 from urllib.parse import urlparse
 
-import redis
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from groq import Groq
 from PIL import Image
@@ -24,9 +22,6 @@ from app.services.supabase_client import supabase
 
 router = APIRouter()
 client = Groq(api_key=settings.GROQ_API_KEY)
-
-
-redis_client = redis.Redis(host="10.159.248.211", port=6379, decode_responses=True)
 
 
 @router.post("/posts")
@@ -121,11 +116,6 @@ def timeline(
     current_user: User = Depends(get_current_user),
 ):
 
-    cache_key = f"timeline:{current_user.id}"
-    cached = redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
-
     connection_exists = (
         db.query(Connection)
         .filter(
@@ -194,7 +184,7 @@ def timeline(
         for post, user, liked_post_id in results
     ]
 
-    redis_client.setex(cache_key, 60, json.dumps(response))
+    # Cache removed; return response directly
     return response
 
 
@@ -403,7 +393,6 @@ def like_post(post_id: str, user: User = Depends(get_current_user), db: Session 
         db.add(notification)
 
     db.commit()
-    redis_client.delete(f"timeline:{user.id}")
     return {"message": "Liked"}
 
 
@@ -420,8 +409,6 @@ def unlike_post(post_id: str, user: User = Depends(get_current_user), db: Sessio
     post.like_count = max(0, post.like_count - 1)
 
     db.commit()
-    redis_client.delete(f"timeline:{user.id}")
-
     return {"message": "Unliked"}
 
 
@@ -508,33 +495,6 @@ async def eloborate_post(content: str = Form(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/debug/redis-health")
-async def redis_health():
-    try:
-        # Test write
-        redis_client.set("health:test", "ok", ex=30)
-
-        # Test read
-        value = redis_client.get("health:test")
-
-        # Fetch stats
-        info = redis_client.info("stats")
-
-        return {
-            "status": "connected",
-            "ping": redis_client.ping(),
-            "test_value": value,
-            "keyspace_hits": info.get("keyspace_hits"),
-            "keyspace_misses": info.get("keyspace_misses"),
-        }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-        }
 
 
 @router.post("/{post_id}/comments")
